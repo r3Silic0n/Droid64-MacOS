@@ -75,6 +75,17 @@ public class Tap extends T64 {
 		return saveAs(null);
 	}
 
+	/** @return machine of the tape: 0 C64, 1 VIC-20, 2 C16/Plus4, 3 PET */
+	public int getMachineId() {
+		if (isPlus4(tapData)) {
+			return 2;
+		}
+		if (tapData != null && tapData.length > 20 && (tapData[12] & 255) >= 2) {
+			return tapData[13] & 255;
+		}
+		return 0;
+	}
+
 	/** @return the original TAP file contents */
 	public byte[] getTapData() {
 		return tapData;

@@ -29,6 +29,18 @@ public final class MachineDetector {
 		if (image == null) {
 			return null;
 		}
+		if (image instanceof droid64.d64.Tap) {
+			switch (((droid64.d64.Tap) image).getMachineId()) {
+			case 1:
+				return C64.Machine.VIC20;
+			case 2:
+				return C64.Machine.PLUS4;
+			case 3:
+				return C64.Machine.PET;
+			default:
+				return C64.Machine.C64;
+			}
+		}
 		try {
 			for (int i = 0; i < image.getFilesUsedCount(); i++) {
 				var f = image.getCbmFile(i);
