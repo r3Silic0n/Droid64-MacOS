@@ -64,7 +64,15 @@ public final class MachineDetector {
 		switch (load) {
 		case 0x0801: c64 += 3; break;
 		case 0x1C01: c128 += 6; break;
-		case 0x1001: plus4 += 2; vic += 2; break;
+		case 0x1001:
+			// an unexpanded VIC-20 has less than 4 KB of BASIC RAM: a bigger program at $1001 is for the Plus/4
+			if (data.length > 3800) {
+				plus4 += 6;
+			} else {
+				plus4 += 2;
+				vic += 2;
+			}
+			break;
 		case 0x1201: vic += 5; break;
 		default: pet += 6; break;
 		}
@@ -87,10 +95,48 @@ public final class MachineDetector {
 			} else if (hi == 0xD5 || hi == 0xD6) {
 				c128 += 3;
 			} else if (hi == 0x90 && lo <= 0x0F || hi == 0x91 && lo >= 0x10 && lo <= 0x2F) {
-				vic += 2;
+				if (load != 0x1001 || data.length <= 3800) {
+					vic += 2;
+				}
 			} else if (hi == 0xE8 && lo >= 0x10 && lo <= 0x4F) {
 				pet += 3;
 			}
+		}
+		// the load address of the BASIC start decides which computers are possible at all
+		switch (load) {
+		case 0x0801:
+			plus4 = 0;
+			vic = 0;
+			pet = 0;
+			break;
+		case 0x1001:
+			c64 = 0;
+			c128 = 0;
+			pet = 0;
+			break;
+		case 0x1201:
+			c64 = 0;
+			c128 = 0;
+			plus4 = 0;
+			pet = 0;
+			break;
+		case 0x1C01:
+			c64 = 0;
+			plus4 = 0;
+			vic = 0;
+			pet = 0;
+			break;
+		default:
+			break;
+		}
+		if (load == 0x0801 && c64 == 0 && c128 == 0) {
+			return C64.Machine.C64;
+		}
+		if (load == 0x1C01) {
+			return C64.Machine.C128;
+		}
+		if (load == 0x1201) {
+			return C64.Machine.VIC20;
 		}
 		// Plus/4 programs never touch VIC/SID, C64 programs never touch TED.
 		C64.Machine best = C64.Machine.PLUS4;
