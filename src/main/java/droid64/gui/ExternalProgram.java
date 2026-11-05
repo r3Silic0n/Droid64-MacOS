@@ -136,6 +136,9 @@ public class ExternalProgram {
 		if (found == null && "x64sc".equals(exe)) {
 			found = findVice(setting.getString(), "x64");
 		}
+		if (found == null && setting.getString() != null && new File(setting.getString().trim()).isDirectory()) {
+			return cmd;
+		}
 		return found != null ? found.getPath() : (setting.getString() == null || setting.getString().trim().isEmpty() ? cmd : setting.getString().trim());
 	}
 
@@ -168,8 +171,9 @@ public class ExternalProgram {
 		if (place.isFile()) {
 			if (place.getName().equals("droplet") && place.getParentFile() != null && place.getParentFile().getParentFile() != null
 					&& place.getParentFile().getParentFile().getParentFile() != null) {
-				var real = new File(place.getParentFile().getParentFile().getParentFile(), "Contents/Resources/bin/" + exe);
-				if (real.isFile()) {
+				var app = place.getParentFile().getParentFile().getParentFile();
+				var real = findViceIn(app, exe);
+				if (real != null) {
 					return real;
 				}
 			}
@@ -179,12 +183,17 @@ public class ExternalProgram {
 			return null;
 		}
 		var candidates = new ArrayList<File>();
+		if (place.getName().endsWith(".app") && place.getParentFile() != null) {
+			// VICE 3.x distribution folder: xplus4.app (droplet) next to bin/xplus4
+			candidates.add(new File(place.getParentFile(), "bin/" + exe));
+		}
 		if (place.getName().endsWith(".app")) {
 			// VICE 3.x GTK bundles: Contents/MacOS holds only a "droplet" launcher which drops the command line,
 			// the emulator itself is in Contents/Resources/bin
 			candidates.add(new File(place, "Contents/Resources/bin/" + exe));
 			candidates.add(new File(place, "Contents/MacOS/" + exe));
 		}
+		candidates.add(new File(place, "bin/" + exe));
 		candidates.add(new File(place, exe + ".app/Contents/Resources/bin/" + exe));
 		candidates.add(new File(place, exe + ".app/Contents/MacOS/" + exe));
 		candidates.add(new File(place, exe));
