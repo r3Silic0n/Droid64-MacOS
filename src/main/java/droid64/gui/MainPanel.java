@@ -1127,6 +1127,13 @@ public class MainPanel implements Serializable {
 			});
 
 		try {
+			if (System.getProperty("os.name", "").startsWith("Mac") && java.awt.Taskbar.isTaskbarSupported()) {
+				// set the Dock icon explicitly, so a stale icon cache of the Dock cannot show an old icon while the program runs
+				var dockUrl = getClass().getResource("/dockicon.png");
+				if (dockUrl != null && java.awt.Taskbar.getTaskbar().isSupported(java.awt.Taskbar.Feature.ICON_IMAGE)) {
+					java.awt.Taskbar.getTaskbar().setIconImage(new ImageIcon(dockUrl).getImage());
+				}
+			}
 			// on macOS the icon of the application bundle (.icns) is used; a frame icon would replace the Dock icon while running
 			var iconURL = System.getProperty("os.name", "").startsWith("Mac") ? null : getClass().getResource("/favicon.png");
 			if (iconURL != null) {
