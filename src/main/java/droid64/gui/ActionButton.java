@@ -9,7 +9,7 @@ public enum ActionButton {
 	BAM_BUTTON(              2, Resources.DROID64_BUTTON_SHOWBAM,       'b', false),
 	UP_BUTTON(               3, Resources.DROID64_BUTTON_UP,            'U', false),
 	COPY_FILE_BUTTON(        4, Resources.DROID64_BUTTON_COPY,          'c', false),
-	MD5_BUTTON(              5, Resources.DROID64_BUTTON_MD5,           '5', false),
+	FTP_BUTTON(              5, Resources.DROID64_BUTTON_FTP,           'f', false),
 	VIEW_TEXT_BUTTON(        6, Resources.DROID64_BUTTON_VIEWTEXT,      't', false),
 	PLUGIN_1_BUTTON(         7, "",                                     '1', true),
 	HIDE_CONSOLE_BUTTON(     8, Resources.DROID64_BUTTON_HIDECONSOLE,   'e', false),

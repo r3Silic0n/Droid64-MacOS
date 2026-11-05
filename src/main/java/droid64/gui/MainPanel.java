@@ -131,7 +131,7 @@ public class MainPanel implements Serializable {
 	private JButton delPRGButton;
 	private JButton renamePRGButton;
 
-	private JButton md5Button;
+	private JButton ftpButton;
 	private JButton searchButton;
 
 	/** The plugin buttons. Used to be able to change the label from settings. */
@@ -374,7 +374,6 @@ public class MainPanel implements Serializable {
 		case MOVE_FILE_BUTTON:
 		case DELETE_FILE_BUTTON:
 		case RENAME_FILE_BUTTON:
-		case MD5_BUTTON:
 			button.setBackground(adjustedColor(BASE_BUTTON_COLOR, 20, -20, 20));
 			break;
 		case VIEW_IMAGE_BUTTON:
@@ -383,6 +382,7 @@ public class MainPanel implements Serializable {
 		case VIEW_BASIC_BUTTON:
 			button.setBackground(adjustedColor(BASE_BUTTON_COLOR, 20, 20, -20));
 			break;
+		case FTP_BUTTON:
 		case PLUGIN_1_BUTTON:
 		case PLUGIN_2_BUTTON:
 		case PLUGIN_3_BUTTON:
@@ -657,9 +657,9 @@ public class MainPanel implements Serializable {
 			var diskPanel = getActiveDiskPanel();
 			DirArtEditorDialog.show(parent, diskPanel, diskPanel != null ? diskPanel.getDiskImage() : null);
 		});
-		md5Button = createButton(ActionButton.MD5_BUTTON, event -> {
-			if (md5Button.getActionCommand().equals(event.getActionCommand()) && getActiveDiskPanel() != null ) {
-				getActiveDiskPanel().calcMd5Checksum();
+		ftpButton = createButton(ActionButton.FTP_BUTTON, event -> {
+			if (ftpButton.getActionCommand().equals(event.getActionCommand())) {
+				FtpDialog.show(this);
 			}
 		});
 		searchButton = createButton(ActionButton.SEARCH_BUTTON, event -> {
