@@ -23,6 +23,7 @@ public class Tap extends T64 {
 	private static final class Block {
 		boolean first;
 		boolean ok;
+		int pos;
 		byte[] payload = new byte[0];
 	}
 
@@ -31,6 +32,11 @@ public class Tap extends T64 {
 		String name;
 		int start;
 		byte[] data;
+		byte[] header = new byte[0];
+		/** turbo data with a checksum error, incomplete, or not found */
+		boolean damaged;
+		/** index of the pulse where the header block starts */
+		int pos;
 		boolean seq;
 	}
 
@@ -57,6 +63,11 @@ public class Tap extends T64 {
 		filesUsedCount = Utility.getInt16(cbmDisk, 0x24);
 		initCbmFile(entryCapacity);
 		feedbackStream.append("TAP: ").append(programs.size()).append(" KERNAL program(s) found.");
+		long damagedCount = programs.stream().filter(q -> q.damaged).count();
+		if (damagedCount > 0) {
+			feedbackStream.append("TAP: turbo data missing or with checksum errors (tape damaged?): ");
+			feedbackStream.append(programs.stream().filter(q -> q.damaged).map(q -> q.name).collect(java.util.stream.Collectors.joining(", "))).append("\n");
+		}
 		boolean stubsOnly = !programs.isEmpty() && programs.stream().allMatch(q -> q.data.length <= 2);
 		feedbackStream.append(programs.isEmpty() ? " No standard programs (turbo tape?): start the tape as a whole in the emulator.\n"
 				: stubsOnly ? " Turbo tape: only the names are standard; the program data cannot be extracted, start the tape in the emulator.\n"
@@ -239,6 +250,7 @@ public class Tap extends T64 {
 			}
 			var raw = bytes.toByteArray();
 			var blk = new Block();
+			blk.pos = sync;
 			if (raw.length >= 10 && (raw[0] == (byte) 0x89 || raw[0] == 0x09)) {
 				blk.first = raw[0] == (byte) 0x89;
 				blk.payload = java.util.Arrays.copyOfRange(raw, 9, raw.length - 1);
@@ -253,12 +265,153 @@ public class Tap extends T64 {
 				continue;
 			}
 		}
-		return assemble(blocks);
+		var programs = assemble(blocks);
+		if (!plus4) {
+			applyTurbo(programs, p);
+		}
+		return programs;
+	}
+
+
+	// ---- turbo loader (the "0x02 pilot" loader which sits in the header block of every file) ----
+
+	/** start of the turbo loader code in the 192 byte header block (it is executed from the tape buffer) */
+	private static final int[] LOADER = { 0xa9, 0x08, 0x85, 0xa3, 0x20, 0x61, 0x03, 0x66, 0xbd };
+	private static final int TURBO_ONE = 288;	// cycles: longer pulses are 1 bits (timer B latch of the loader)
+
+	/** One block of turbo data. */
+	private static final class TurboBlock {
+		int pos;
+		int start;
+		byte[] data;
+		boolean ok;
+	}
+
+	private static boolean hasTurboLoader(Program p) {
+		if (p.data.length > 2 || p.header.length < 21 + LOADER.length) {
+			return false;
+		}
+		for (int i = 0; i < LOADER.length; i++) {
+			if ((p.header[21 + i] & 255) != LOADER[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** Replace the two byte stubs of the programs with the data of the turbo blocks which follow them. */
+	private static void applyTurbo(List<Program> programs, int[] p) {
+		if (programs.isEmpty() || programs.stream().noneMatch(Tap::hasTurboLoader)) {
+			return;
+		}
+		var blocks = scanTurbo(p);
+		for (int k = 0; k < programs.size(); k++) {
+			var prog = programs.get(k);
+			if (!hasTurboLoader(prog)) {
+				continue;
+			}
+			int next = k + 1 < programs.size() ? programs.get(k + 1).pos : Integer.MAX_VALUE;
+			TurboBlock found = null;
+			for (var b : blocks) {
+				if (b.pos > prog.pos && b.pos < next) {
+					found = b;
+					break;
+				}
+			}
+			if (found == null) {
+				prog.data = new byte[0];
+				prog.damaged = true;
+			} else {
+				prog.start = found.start;
+				prog.data = found.data;
+				prog.damaged = !found.ok;
+			}
+		}
+	}
+
+	/**
+	 * Find the turbo blocks: a leader of $02 bytes, a $01 marker (after a count down), end address, start address
+	 * (both high byte first), the data, and a checksum (sum of the data bytes). Bits come LSB first, a pulse longer
+	 * than the timer value of the loader is a 1.
+	 */
+	private static List<TurboBlock> scanTurbo(int[] p) {
+		int n = p.length;
+		var bits = new byte[n];
+		for (int i = 0; i < n; i++) {
+			bits[i] = (byte) (p[i] >= TURBO_ONE && p[i] < 400000 ? 1 : 0);
+		}
+		var out = new ArrayList<TurboBlock>();
+		int i = 0;
+		while (i + 64 < n) {
+			if (!isPilot(bits, i)) {
+				i++;
+				continue;
+			}
+			int j = i;
+			int reps = 0;
+			while (j + 8 <= n && isPilot(bits, j)) {
+				j += 8;
+				reps++;
+			}
+			if (reps < 8) {
+				i = j;
+				continue;
+			}
+			int k = 0;
+			while (k < 40 && j + 8 <= n && byteAt(bits, j) != 1) {
+				j += 8;
+				k++;
+			}
+			if (j + 8 > n || byteAt(bits, j) != 1) {
+				i = j;
+				continue;
+			}
+			j += 8;
+			if (j + 32 > n) {
+				break;
+			}
+			int end = byteAt(bits, j) << 8 | byteAt(bits, j + 8);
+			int start = byteAt(bits, j + 16) << 8 | byteAt(bits, j + 24);
+			j += 32;
+			int len = end - start;
+			if (len <= 0 || len > 65536) {
+				i = j;
+				continue;
+			}
+			var b = new TurboBlock();
+			b.pos = i;
+			b.start = start;
+			int avail = Math.min(len, (n - j) / 8);
+			b.data = new byte[avail];
+			int sum = 0;
+			for (int q = 0; q < avail; q++) {
+				b.data[q] = (byte) byteAt(bits, j + 8 * q);
+				sum += b.data[q] & 255;
+			}
+			b.ok = avail == len && j + 8 * len + 8 <= n && byteAt(bits, j + 8 * len) == (sum & 255);
+			out.add(b);
+			i = j + 8 * avail + 8;
+		}
+		return out;
+	}
+
+	private static boolean isPilot(byte[] bits, int i) {
+		return i + 8 <= bits.length && bits[i] == 0 && bits[i + 1] == 1 && bits[i + 2] == 0 && bits[i + 3] == 0
+				&& bits[i + 4] == 0 && bits[i + 5] == 0 && bits[i + 6] == 0 && bits[i + 7] == 0;
+	}
+
+	private static int byteAt(byte[] bits, int j) {
+		int v = 0;
+		for (int k = 0; k < 8; k++) {
+			v |= bits[j + k] << k;
+		}
+		return v;
 	}
 
 	/** Combine the two copies of every block and group header + data into programs. */
 	private static List<Program> assemble(List<Block> blocks) {
 		var logical = new ArrayList<byte[]>();
+		var logicalPos = new ArrayList<Integer>();
 		for (int k = 0; k < blocks.size(); k++) {
 			var b = blocks.get(k);
 			var best = b;
@@ -269,6 +422,7 @@ public class Tap extends T64 {
 				k++;
 			}
 			logical.add(best.payload);
+			logicalPos.add(b.pos);
 		}
 		var out = new ArrayList<Program>();
 		Program cur = null;
@@ -290,6 +444,8 @@ public class Tap extends T64 {
 			}
 			if (header && b[0] != 5) {
 				cur = new Program();
+				cur.header = b.clone();
+				cur.pos = logicalPos.get(k);
 				cur.start = (b[1] & 255) | (b[2] & 255) << 8;
 				int end = (b[3] & 255) | (b[4] & 255) << 8;
 				cur.name = new String(b, 5, 16, java.nio.charset.StandardCharsets.ISO_8859_1).replaceAll("[\\x00-\\x1f\\x80-\\x9f]", "").trim();
