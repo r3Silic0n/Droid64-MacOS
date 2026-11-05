@@ -1127,7 +1127,8 @@ public class MainPanel implements Serializable {
 			});
 
 		try {
-			var iconURL = getClass().getResource("/favicon.png");
+			// on macOS the icon of the application bundle (.icns) is used; a frame icon would replace the Dock icon while running
+			var iconURL = System.getProperty("os.name", "").startsWith("Mac") ? null : getClass().getResource("/favicon.png");
 			if (iconURL != null) {
 				var icon = new ImageIcon(iconURL);
 				parent.setIconImage(icon.getImage());
