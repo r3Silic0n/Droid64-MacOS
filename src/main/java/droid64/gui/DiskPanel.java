@@ -573,7 +573,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			for (var row : table.getSelectedRows()) {
 				var f = diskImage.getCbmFile(row);
 				if (f != null && f.getFileType() == FileType.PRG) {
-					onlyPrg.add(f.getName().toLowerCase());
+					onlyPrg.add(viceName(f));
 				}
 			}
 			selectedFiles = onlyPrg;
@@ -590,12 +590,38 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		prg.runProgram(imgParentFile, execArgs, mainPanel);
 	}
 
+	/** Name of a file as VICE expects it after "image:" - VICE maps ASCII to PETSCII (a-z to $41-$5A, A-Z to $C1-$DA). */
+	static String viceName(droid64.d64.CbmFile f) {
+		var raw = f.getNameAsBytes();
+		if (raw == null) {
+			return f.getName().toLowerCase();
+		}
+		int len = raw.length;
+		while (len > 0 && (raw[len - 1] & 0xff) == 0xa0) {
+			len--;
+		}
+		var sb = new StringBuilder();
+		for (int i = 0; i < len; i++) {
+			int b = raw[i] & 0xff;
+			if (b >= 0x41 && b <= 0x5a) {
+				sb.append((char) (b + 0x20));
+			} else if (b >= 0xc1 && b <= 0xda) {
+				sb.append((char) (b - 0x80));
+			} else if (b >= 0x20 && b <= 0x3f) {
+				sb.append((char) b);
+			} else {
+				sb.append('?');
+			}
+		}
+		return sb.toString();
+	}
+
 	protected List<String> getSelectedFiles() {
 		var selectedFiles = new ArrayList<String>();
 		for (var row : table.getSelectedRows()) {
 			final String selectedFile;
 			if (imageLoaded) {
-				selectedFile = diskImage.getCbmFile(row).getName().toLowerCase();
+				selectedFile = viceName(diskImage.getCbmFile(row));
 			} else {
 				selectedFile = currentImagePath + File.separator + ((String) tableModel.getValueAt(row, 1));
 			}
