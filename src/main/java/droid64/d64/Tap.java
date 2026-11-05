@@ -16,6 +16,8 @@ public class Tap extends T64 {
 
 	private static final long serialVersionUID = 1L;
 	private static final String SIGNATURE = "C64-TAPE-RAW";
+	/** C16 / Plus/4 tapes: version 2, every pulse is a half wave. */
+	private static final String SIGNATURE_C16 = "C16-TAPE-RAW";
 
 	/** One decoded KERNAL block. */
 	private static final class Block {
@@ -55,7 +57,10 @@ public class Tap extends T64 {
 		filesUsedCount = Utility.getInt16(cbmDisk, 0x24);
 		initCbmFile(entryCapacity);
 		feedbackStream.append("TAP: ").append(programs.size()).append(" KERNAL program(s) found.");
-		feedbackStream.append(programs.isEmpty() ? " No standard programs (turbo tape?): start the tape as a whole in the emulator.\n" : " Turbo loader data, if any, is not listed.\n");
+		boolean stubsOnly = !programs.isEmpty() && programs.stream().allMatch(q -> q.data.length <= 2);
+		feedbackStream.append(programs.isEmpty() ? " No standard programs (turbo tape?): start the tape as a whole in the emulator.\n"
+				: stubsOnly ? " Turbo tape: only the names are standard; the program data cannot be extracted, start the tape in the emulator.\n"
+				: " Turbo loader data, if any, is not listed.\n");
 		return this;
 	}
 
@@ -79,7 +84,7 @@ public class Tap extends T64 {
 
 	/** @return the pulse lengths in cycles */
 	static int[] pulses(byte[] d) {
-		if (d == null || d.length < 20 || !new String(d, 0, SIGNATURE.length()).equals(SIGNATURE)) {
+		if (d == null || d.length < 20 || !(new String(d, 0, SIGNATURE.length()).equals(SIGNATURE) || isPlus4(d))) {
 			return new int[0];
 		}
 		int version = d[12] & 255;
@@ -97,16 +102,49 @@ public class Tap extends T64 {
 				out[n++] = 256 * 8;
 			}
 		}
+		if (isPlus4(d)) {
+			return joinHalfWaves(out, n);
+		}
 		return java.util.Arrays.copyOf(out, n);
 	}
 
-	private static char cls(int cycles, double scale) {
+	/** @return true for a C16 / Plus/4 tape image */
+	static boolean isPlus4(byte[] d) {
+		return d != null && d.length >= 20 && new String(d, 0, SIGNATURE_C16.length()).equals(SIGNATURE_C16);
+	}
+
+	/**
+	 * Two half waves make one pulse. The two halves of a wave are about the same length, so a stray half wave
+	 * (which would shift every following pair) is dropped; a long gap stands alone.
+	 */
+	private static int[] joinHalfWaves(int[] h, int n) {
+		var out = new int[n + 2];
+		int m = 0;
+		int i = 0;
+		while (i < n) {
+			if (h[i] > 3000) {
+				out[m++] = h[i++];
+			} else if (i + 1 < n && h[i + 1] <= 3000 && h[i + 1] * 100L < h[i] * 170L && h[i] * 100L < h[i + 1] * 170L) {
+				out[m++] = h[i] + h[i + 1];
+				i += 2;
+			} else {
+				i++;
+			}
+		}
+		return java.util.Arrays.copyOf(out, m);
+	}
+
+	private static char cls(int cycles, double scale, boolean plus4) {
 		double c = cycles / scale;
+		if (plus4) {
+			return c < 660 ? 'S' : c < 1320 ? 'M' : 'L';	// short : medium : long = 1 : 2 : 4
+		}
 		return c < 456 ? 'S' : c < 608 ? 'M' : 'L';
 	}
 
 	static List<Program> decode(byte[] tap) {
 		var p = pulses(tap);
+		boolean plus4 = isPlus4(tap);
 		var blocks = new ArrayList<Block>();
 		int i = 0;
 		int n = p.length;
@@ -115,11 +153,11 @@ public class Tap extends T64 {
 			int run = 0;
 			int sync = -1;
 			for (; i < n; i++) {
-				char c = cls(p[i], 1.0);
+				char c = cls(p[i], 1.0, plus4);
 				if (c == 'S') {
 					run++;
 				} else {
-					if (run >= 40 && c == 'L' && i + 1 < n && cls(p[i + 1], 1.0) == 'M') {
+					if (run >= 40 && c == 'L' && i + 1 < n && cls(p[i + 1], 1.0, plus4) == 'M') {
 						sync = i;
 						break;
 					}
@@ -133,7 +171,7 @@ public class Tap extends T64 {
 			for (int k = sync - 30; k < sync; k++) {
 				sum += p[k];
 			}
-			double scale = sum / 30 / 384.0;
+			double scale = sum / 30 / (plus4 ? 440.0 : 384.0);
 			if (scale < 0.7 || scale > 1.4) {
 				scale = 1.0;
 			}
@@ -142,8 +180,8 @@ public class Tap extends T64 {
 			boolean ok = true;
 			boolean ended = false;
 			while (i + 1 < n && !ended) {
-				char a = cls(p[i], scale);
-				char b = cls(p[i + 1], scale);
+				char a = cls(p[i], scale, plus4);
+				char b = cls(p[i + 1], scale, plus4);
 				if (a == 'L' && b == 'M') {
 					i += 2;
 					int v = 0;
@@ -154,8 +192,8 @@ public class Tap extends T64 {
 							bad = true;
 							break;
 						}
-						char x = cls(p[i], scale);
-						char y = cls(p[i + 1], scale);
+						char x = cls(p[i], scale, plus4);
+						char y = cls(p[i + 1], scale, plus4);
 						i += 2;
 						int val;
 						if (x == 'S' && y == 'M') {
@@ -243,7 +281,7 @@ public class Tap extends T64 {
 				cur = new Program();
 				cur.start = (b[1] & 255) | (b[2] & 255) << 8;
 				int end = (b[3] & 255) | (b[4] & 255) << 8;
-				cur.name = new String(b, 5, 16, java.nio.charset.StandardCharsets.ISO_8859_1);
+				cur.name = new String(b, 5, 16, java.nio.charset.StandardCharsets.ISO_8859_1).replaceAll("[\\x00-\\x1f\\x80-\\x9f]", "").trim();
 				if (b[0] == 4) {
 					cur.seq = true;
 					cur.start = 0;
