@@ -67,14 +67,27 @@ public final class UpdateDialog extends JDialog {
 				SwingUtilities.invokeLater(() -> text.append(m + "\n"));
 			}
 
+			private long startTime = System.currentTimeMillis();
+
 			@Override
 			public void progress(long done, long total) {
+				if (done == 0) {
+					startTime = System.currentTimeMillis();
+				}
+				final long t0 = startTime;
 				SwingUtilities.invokeLater(() -> {
-					bar.setIndeterminate(total <= 0);
-					if (total > 0) {
+					bar.setStringPainted(true);
+					if (total <= 0 && done == 0) {
+						bar.setIndeterminate(true);
+						bar.setString("working ...");
+					} else if (total <= 0) {
+						bar.setIndeterminate(true);
+						bar.setString(String.format("%.1f MB", done / 1048576.0));
+					} else {
+						bar.setIndeterminate(false);
 						bar.setValue((int) (1000L * done / total));
-						bar.setString(done / 1024 / 1024 + " / " + total / 1024 / 1024 + " MB");
-						bar.setStringPainted(true);
+						double sec = Math.max(0.001, (System.currentTimeMillis() - t0) / 1000.0);
+						bar.setString(String.format("%d%%   %.1f / %.1f MB   %.1f MB/s", 100L * done / total, done / 1048576.0, total / 1048576.0, done / 1048576.0 / sec));
 					}
 				});
 			}
@@ -142,11 +155,21 @@ public final class UpdateDialog extends JDialog {
 			return;
 		}
 		var dir = fc.getSelectedFile();
+		var link = JOptionPane.showInputDialog(parent, "Link (URL) of the full HVSC .7z archive, e.g. copied from hvsc.c64.org/downloads.\nLeave empty to search the mirror list in the settings.", "Download HVSC", JOptionPane.QUESTION_MESSAGE);
+		if (link == null) {
+			return;
+		}
+		final var source = link.trim().isEmpty() ? Setting.HVSC_MIRRORS.getString() : link.trim();
 		new UpdateDialog(parent, "Download HVSC").run(log -> {
-			var root = HvscUpdater.installFull(dir, Setting.HVSC_MIRRORS.getString(), log);
+			var root = HvscUpdater.installFull(dir, source, log);
 			Setting.HVSC_DIR.set(root.getPath());
 			log.log("HVSC folder set to " + root + " (press OK in the settings to keep it).");
 		}, null);
+	}
+
+	/** For tests: download from a given link into a folder. */
+	static void runForTest(Component parent, File dir, String url) {
+		new UpdateDialog(parent, "Download HVSC").run(log -> HvscUpdater.installFull(dir, url, log), null);
 	}
 
 	// ---- VICE ----

@@ -68,15 +68,22 @@ final class Http {
 			try (InputStream in = r.body(); var out = Files.newOutputStream(tmp.toPath())) {
 				var buf = new byte[65536];
 				long done = 0;
+				long lastReport = 0;
 				int n;
+				p.update(0, total);
 				while ((n = in.read(buf)) > 0) {
 					if (cancelled.getAsBoolean()) {
 						throw new IOException("cancelled");
 					}
 					out.write(buf, 0, n);
 					done += n;
-					p.update(done, total);
+					long now = System.currentTimeMillis();
+					if (now - lastReport >= 100) {
+						lastReport = now;
+						p.update(done, total);
+					}
 				}
+				p.update(done, total);
 			}
 			Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		} catch (InterruptedException e) {

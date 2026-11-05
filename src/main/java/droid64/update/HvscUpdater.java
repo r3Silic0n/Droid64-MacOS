@@ -134,6 +134,7 @@ public final class HvscUpdater {
 			var archive = new File(tmp, "update.7z");
 			Http.download(url, archive, log::progress, log::cancelled);
 			log.log("Extracting ...");
+			log.progress(0, -1);
 			var ex = new File(tmp, "ex");
 			SevenZip.extract(archive, ex);
 			var up = new File(ex, "update");
@@ -166,22 +167,30 @@ public final class HvscUpdater {
 	public static File installFull(File targetDir, String mirrorList, Log log) throws IOException {
 		targetDir.mkdirs();
 		String url = null;
-		for (var m : mirrors(mirrorList)) {
-			int found = -1;
-			for (int v = 85; v < 200; v++) {
-				if (Http.exists(m + "HVSC_" + v + "-all-of-it.7z")) {
-					found = v;
-				} else if (found > 0) {
+		var given = mirrorList == null ? "" : mirrorList.trim();
+		if (given.toLowerCase().endsWith(".7z")) {
+			url = given;	// direct link to the archive
+		} else {
+			log.progress(0, -1);
+			for (var m : mirrors(mirrorList)) {
+				log.log("Looking for the full HVSC on " + m + " ...");
+				int found = -1;
+				for (int v = 85; v < 200 && !log.cancelled(); v++) {
+					if (Http.exists(m + "HVSC_" + v + "-all-of-it.7z")) {
+						found = v;
+					} else if (found > 0) {
+						break;
+					}
+				}
+				if (found > 0) {
+					url = m + "HVSC_" + found + "-all-of-it.7z";
 					break;
 				}
-			}
-			if (found > 0) {
-				url = m + "HVSC_" + found + "-all-of-it.7z";
-				break;
+				log.log("  not found there");
 			}
 		}
 		if (url == null) {
-			throw new IOException("No HVSC download found on the mirrors. Check the mirror list in the settings.");
+			throw new IOException("No HVSC download found on the mirrors. Download the full HVSC .7z in your browser from hvsc.c64.org and give its link or file in the dialog.");
 		}
 		var tmp = Files.createTempDirectory("hvsc-full").toFile();
 		try {
@@ -189,6 +198,7 @@ public final class HvscUpdater {
 			var archive = new File(tmp, "hvsc.7z");
 			Http.download(url, archive, log::progress, log::cancelled);
 			log.log("Extracting (this takes a while) ...");
+			log.progress(0, -1);
 			SevenZip.extract(archive, targetDir);
 		} finally {
 			deleteTree(tmp);
