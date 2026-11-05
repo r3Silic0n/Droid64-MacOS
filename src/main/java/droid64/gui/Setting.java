@@ -51,9 +51,25 @@ public enum Setting {
 	DIR_LOCAL_BG("color_dir_local_bg",           ParameterType.COLOR,            new JPanel().getBackground()),
 	DIR_LOCAL_FG("color_dir_local_fg",           ParameterType.COLOR,            new JPanel().getForeground()),
 	EXT_REMOVAL("ext_removal",                   ParameterType.STRING_LIST,      Arrays.asList(".prg;.seq".split(Setting.DELIM))),
-	FONT_SIZE("font_size",                       ParameterType.INTEGER,          Integer.valueOf(10)),
+	FONT_SIZE("font_size",                       ParameterType.INTEGER,          Integer.valueOf(12)),
 	HIDECONSOLE("hide_console",                  ParameterType.BOOLEAN,          Boolean.FALSE),
-	LOCAL_FONT_SIZE("local_font_size",           ParameterType.INTEGER,          Integer.valueOf(10)),
+	LOCAL_FONT_SIZE("local_font_size",           ParameterType.INTEGER,          Integer.valueOf(12)),
+	VICE_X64("vice_x64",                         ParameterType.STRING,           Utility.EMPTY),
+	VICE_X128("vice_x128",                       ParameterType.STRING,           Utility.EMPTY),
+	VICE_XPLUS4("vice_xplus4",                   ParameterType.STRING,           Utility.EMPTY),
+	VICE_XVIC("vice_xvic",                       ParameterType.STRING,           Utility.EMPTY),
+	HVSC_DIR("hvsc_dir",                         ParameterType.STRING,           Utility.EMPTY),
+	HVSC_MIRRORS("hvsc_mirrors",                 ParameterType.STRING,           droid64.update.HvscUpdater.DEFAULT_MIRRORS),
+	UPDATE_AUTO("update_auto",                   ParameterType.BOOLEAN,          Boolean.TRUE),
+	UPDATE_LAST("update_last",                   ParameterType.INTEGER,          Integer.valueOf(0)),
+	LAST_SAVE_DIR("last_save_dir",               ParameterType.STRING,           Utility.EMPTY),
+	LAST_LOAD_DIR("last_load_dir",               ParameterType.STRING,           Utility.EMPTY),
+	RESTORE_DISK1("restore_disk1",               ParameterType.BOOLEAN,          Boolean.TRUE),
+	RESTORE_DISK2("restore_disk2",               ParameterType.BOOLEAN,          Boolean.TRUE),
+	LAST_PATH1("last_path1",                     ParameterType.STRING,           Utility.EMPTY),
+	LAST_PATH2("last_path2",                     ParameterType.STRING,           Utility.EMPTY),
+	REMEMBER_WINDOW("remember_window",           ParameterType.BOOLEAN,          Boolean.TRUE),
+	WINDOW_BOUNDS("window_bounds",               ParameterType.STRING,           Utility.EMPTY),
 	WINDOW("window",                             ParameterType.STRING,           Utility.EMPTY),
 	JDBC_DRIVER("jdbc_driver",                   ParameterType.STRING,           Setting.JDBC_DEFAULT_DRIVER),
 	JDBC_URL("jdbc_url",                         ParameterType.STRING,           Setting.JDBC_DEFAULT_URL),
@@ -62,19 +78,21 @@ public enum Setting {
 	JDBC_LIMIT_TYPE("jdbc_limit_type",           ParameterType.INTEGER,          Integer.valueOf(0)),
 	EXCLUDED_IMAGE_FILES("excluded_image_files", ParameterType.STRING,           null),
 	MAX_ROWS("max_rows",                         ParameterType.INTEGER,          Integer.valueOf(25)),
-	ROW_HEIGHT("row_height",                     ParameterType.INTEGER,          Integer.valueOf(10)),
-	LOCAL_ROW_HEIGHT("local_row_height",         ParameterType.INTEGER,          Integer.valueOf(10)),
+	ROW_HEIGHT("row_height",                     ParameterType.INTEGER,          Integer.valueOf(9)),
+	SETTINGS_VERSION("settings_version",         ParameterType.INTEGER,          Integer.valueOf(4)),
+	LOCAL_ROW_HEIGHT("local_row_height",         ParameterType.INTEGER,          Integer.valueOf(18)),
 	USE_DB("use_database",                       ParameterType.BOOLEAN,          Boolean.FALSE),
 	LOOK_AND_FEEL("look_and_feel",               ParameterType.STRING,           "javax.swing.plaf.metal.MetalLookAndFeel"),
-	PLUGIN_COMMAND("plugin_command",             ParameterType.INDEXED_STRING,   Utility.makeList( "d64copy", "x64", "128", "cbmctrl", "xpet", "x64", "x64" )),
-	PLUGIN_ARGUMENTS("plugin_arguments",         ParameterType.INDEXED_STRING,   Utility.makeList( "{Image} 8", Setting.VICE_PLUGIN_ARGS, Setting.VICE_PLUGIN_ARGS, Setting.VICE_PLUGIN_ARGS, "-drive8type {DriveType} -model 8032 {ImageFiles}", "-fs8convertp00 {Files}", "-fs8 {Image}" )),
-	PLUGIN_DESCRIPTION("plugin_description",     ParameterType.INDEXED_STRING,   Utility.makeList( "Transfer this disk image to a real floppy.", "Invoke VICE 64 emulator with this disk image", "Invoke VICE 128 emulator with this disk image", "List files using OpenCBM", "VICE PET emulator", "VICE program", "VICE FS" )),
-	PLUGIN_LABEL("plugin_label",                 ParameterType.INDEXED_STRING,   Utility.makeList( "d64copy", "VICE 64", "VICE 128", "CBM dir", "VICE PET", "VICE prg", "VICE fs" )),
-	PLUGIN_FORK("plugin_fork",                   ParameterType.INDEXED_STRING,   Utility.makeList( "true", "true", "true", "true", "true", "true", "true" )),
+	PLUGIN_COMMAND("plugin_command",             ParameterType.INDEXED_STRING,   Utility.makeList( "x64sc", "x128", "xplus4", "cbmctrl", "d64copy", "x64sc", "x64sc", "xvic" )),
+	PLUGIN_ARGUMENTS("plugin_arguments",         ParameterType.INDEXED_STRING,   Utility.makeList( Setting.VICE_PLUGIN_ARGS, Setting.VICE_PLUGIN_ARGS, Setting.VICE_PLUGIN_ARGS, "dir 8", "{Image} 8", "-fs8convertp00 {Files}", "-fs8 {Image}", Setting.VICE_PLUGIN_ARGS )),
+	PLUGIN_DESCRIPTION("plugin_description",     ParameterType.INDEXED_STRING,   Utility.makeList( "Invoke VICE 64 emulator with this disk image", "Invoke VICE 128 emulator with this disk image", "Invoke VICE Plus/4 emulator with this disk image", "List files using OpenCBM", "Transfer this disk image to a real floppy.", "VICE 64: run program", "VICE 64: file system", "Invoke VICE VIC-20 emulator with this disk image" )),
+	PLUGIN_LABEL("plugin_label",                 ParameterType.INDEXED_STRING,   Utility.makeList( "VICE 64", "VICE 128", "VICE Plus/4", "CBM dir", "d64copy", "VICE prg", "VICE fs", "VICE VC20" )),
+	PLUGIN_FORK("plugin_fork",                   ParameterType.INDEXED_STRING,   Utility.makeList( "true", "true", "true", "true", "true", "true", "true", "true" )),
 	FILE_EXT_D64("file_ext_d64",                 ParameterType.STRING_LIST,      Arrays.asList(".d64".split(Setting.DELIM)) ),
 	FILE_EXT_D67("file_ext_d67",                 ParameterType.STRING_LIST,      Arrays.asList(".d67".split(Setting.DELIM)) ),
 	FILE_EXT_D71("file_ext_d71",                 ParameterType.STRING_LIST,      Arrays.asList(".d71".split(Setting.DELIM)) ),
 	FILE_EXT_D81("file_ext_d81",                 ParameterType.STRING_LIST,      Arrays.asList(".d81".split(Setting.DELIM)) ),
+	FILE_EXT_TAP("file_ext_tap",                 ParameterType.STRING_LIST,      Arrays.asList(".tap".split(Setting.DELIM)) ),
 	FILE_EXT_T64("file_ext_t64",                 ParameterType.STRING_LIST,      Arrays.asList(".t64".split(Setting.DELIM)) ),
 	FILE_EXT_D80("file_ext_d80",                 ParameterType.STRING_LIST,      Arrays.asList(".d80".split(Setting.DELIM)) ),
 	FILE_EXT_D82("file_ext_d82",                 ParameterType.STRING_LIST,      Arrays.asList(".d82".split(Setting.DELIM)) ),
@@ -155,6 +173,10 @@ public enum Setting {
 	}
 	public Font getFont() {
 		var obj = get();
+		if (this == CBM_FONT && obj instanceof Font) {
+			obj = fixCommodoreFont((Font) obj);
+			value = obj;
+		}
 		if (obj instanceof Font) {
 			return (Font) obj;
 		} else if (type == ParameterType.FONT && defaultValue == null && value == null) {
@@ -398,12 +420,19 @@ public enum Setting {
 
 	public static void load(InputStreamReader input) throws IOException {
 		final Map<String,String> props = loadSettings(input);
+		final int fileVersion = Integer.parseInt(props.getOrDefault("settings_version", "0").trim());
+		final boolean oldSettings = fileVersion < 3;
+		// version 4 moved the VICE buttons: older saved plugin buttons are replaced by the new defaults
+		final boolean resetPlugins = fileVersion < 4;
 		getParameters(s -> true).sorted((a, b) -> {
 			if (a.type == ParameterType.FONT) {
 				return b.type == ParameterType.FONT ? 0 : 1;
 			}
 			return b.type == ParameterType.FONT ? -1 : a.id.compareTo(b.id);
 		}).forEach(s -> {
+			if (resetPlugins && s.id.startsWith("plugin_")) {
+				return;
+			}
 			if (props.containsKey(s.id)) {
 				s.parse(props.get(s.id));
 			} else if (s.type == ParameterType.INDEXED_STRING) {
@@ -417,6 +446,17 @@ public enum Setting {
 				s.set(list);
 			}
 		});
+		if (resetPlugins) {
+			SETTINGS_VERSION.set(4);
+		}
+		if (oldSettings) {
+			// settings file from an older version: new defaults for the directory list font
+			FONT_SIZE.set(12);
+			ROW_HEIGHT.set(9);
+			LOCAL_FONT_SIZE.set(12);
+			LOCAL_ROW_HEIGHT.set(18);
+			SETTINGS_VERSION.set(4);
+		}
 	}
 
 	protected static Map<String, String> loadSettings(InputStreamReader input) throws IOException {
@@ -479,7 +519,7 @@ public enum Setting {
 	}
 
 	public static String toString(Font font) {
-		return font != null && !font.equals(getCommodoreFont()) ? font.getName() + DELIM + font.getStyle() + DELIM + font.getSize() : "";
+		return font != null && !font.getName().equals(getCommodoreFont().getName()) ? font.getName() + DELIM + font.getStyle() + DELIM + font.getSize() : "";
 	}
 
 	public static List<ExternalProgram> getExternalPrograms() {
@@ -520,6 +560,19 @@ public enum Setting {
 				.orElse(new int[0]);
 	}
 
+	/**
+	 * A saved font named like the bundled C64 font is not installed in the system, so it would silently
+	 * become a system font. Use the bundled font instead. Unknown, not installed fonts are dropped.
+	 */
+	private static Font fixCommodoreFont(Font font) {
+		var bundled = getCommodoreFont();
+		if (font.getName().equals(bundled.getName()) || font.getFamily().equals(bundled.getFamily())) {
+			return bundled.deriveFont(font.getSize2D());
+		}
+		var families = java.util.Arrays.asList(java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames());
+		return families.contains(font.getName()) && !"Dialog".equals(font.getFamily()) ? font : bundled;
+	}
+
 	private static Font getCommodoreFont() {
 		try {
 			float size = Optional.ofNullable(FONT_SIZE.getInteger()).orElse(12);
@@ -542,6 +595,7 @@ public enum Setting {
 		map.put(DiskImageType.D90_9090, Utility.joinLists(FILE_EXT_D90.getList(), FILE_EXT_D90_GZ.getList()));
 		map.put(DiskImageType.LNX, Utility.joinLists(FILE_EXT_LNX.getList(), FILE_EXT_LNX_GZ.getList()));
 		map.put(DiskImageType.T64, Utility.joinLists(FILE_EXT_T64.getList(), FILE_EXT_T64_GZ.getList()));
+		map.put(DiskImageType.TAP, FILE_EXT_TAP.getList());
 		return map;
 	}
 
@@ -610,6 +664,8 @@ public enum Setting {
 			return compressed ? FILE_EXT_D90_GZ.getList() : FILE_EXT_D90.getList();
 		case T64:
 			return compressed ? FILE_EXT_T64_GZ.getList() : FILE_EXT_T64.getList();
+		case TAP:
+			return FILE_EXT_TAP.getList();
 		case LNX:
 			return compressed ? FILE_EXT_LNX_GZ.getList() : FILE_EXT_LNX.getList();
 		default:

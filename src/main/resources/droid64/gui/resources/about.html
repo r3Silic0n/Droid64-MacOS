@@ -1,5 +1,10 @@
 <html>
 <h1>About, credits and greetings</h1>
+<p><strong>macOS version</strong><br/>
+The native macOS version for Apple Silicon, with the Aqua GUI, was made by Csaba Virag with the assistance of Claude AI.<br/>
+It includes its own Java runtime (Eclipse Temurin / OpenJDK 21, GNU General Public License version 2 with the Classpath Exception).
+</p>
+
 <p>DroiD64 is a file manager for disk-images suitable for the Commodore 64 and others.
 These disk-images are usually stored as .D64 files and have the size of 174848 bytes.</p>
 <p>May this tool make life easier for Commodore 64 fans, especially for those using MAC and Linux systems 
@@ -10,6 +15,19 @@ as there are tools available for Windows anyway.
 File format structures and 1541 information taken from some fairlight docs at: 
 <a href='http://www.fairlight.to/docs/text/formats.zip'>http://www.fairlight.to/docs/text/formats.zip</a><br/>
 Additions, corrections and bug fixes by Henrik Wetterström in 2015 - 2024.
+</p>
+
+<p><strong>Real disk drive support (OpenCBM)</strong><br/>
+The CBM dir and d64copy buttons use cbmctrl and d64copy from OpenCBM 0.4.99, which are included in this application, compiled for Apple Silicon.
+They talk to a real Commodore disk drive (1540, 1541, 1570, 1571) through a XUM1541 USB adapter (also known as ZoomFloppy), so such an adapter must be connected.
+Parallel port cables (XM1541, XA1541) and the XU1541 adapter are not supported in this build.<br/>
+<strong>OpenCBM:</strong> Copyright 1999-2004 Michael Klein, 2001-2007 Spiro Trikaliotis, Wolfgang Moser, Thomas Winkler and the other OpenCBM contributors.
+GNU General Public License version 2 or later. Source code: <a href="https://github.com/OpenCBM/OpenCBM">https://github.com/OpenCBM/OpenCBM</a>.
+Changes in this build: compiled for macOS, and the message "Please Connect your XUM1541 adapter" when no adapter is found.<br/>
+<strong>libusb 1.0.27</strong> (USB access): Copyright Nathan Hjelm, Daniel Drake and the other libusb authors.
+GNU Lesser General Public License version 2.1 or later. Source code: <a href="https://github.com/libusb/libusb">https://github.com/libusb/libusb</a>.<br/>
+The 6502 helper programs of OpenCBM were assembled with the cc65 tools (cc65 itself is not included).<br/>
+The licence texts are in the folder Contents/Resources/opencbm inside the application.
 </p>
 
 <p><strong>Greetings:</strong></p>

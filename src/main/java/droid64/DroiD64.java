@@ -48,5 +48,6 @@ public class DroiD64 {
 		JFrame mainFrame = new JFrame();
 		new MainPanel(mainFrame).parseCommandLine(args);
 		mainFrame.setVisible(true);
+		droid64.gui.UpdateDialog.startupCheck(mainFrame);
 	}
 }

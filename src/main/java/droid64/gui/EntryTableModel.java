@@ -28,6 +28,7 @@
 package droid64.gui;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import javax.swing.table.AbstractTableModel;
@@ -126,24 +127,41 @@ class EntryTableModel extends AbstractTableModel {
 		}
 	}
 
+	/** Number of characters each column should fit; -1 marks the flexible (name) column. */
+	private static final int[] CHARS_CBM = {3, 4, -1, 3, 2, 2, 2};
+	private static final int[] CHARS_CPM = {3, 3, -1, 3, 4, 2, 2};
+	private static final int[] CHARS_LOCAL = {3, -1, 3, 6};
+
 	public TableColumnModel getTableColumnModel() {
 		var columnModel = new DefaultTableColumnModel();
+		int size = Optional.ofNullable(Setting.FONT_SIZE.getInteger()).orElse(12);
 		for (int i=0; i<getColumnCount(); i++) {
-			int wdt;
+			int chars;
 			switch (mode) {
 			case MODE_CBM:
-				wdt = COLWIDTH_CBM[i];
+				chars = i < CHARS_CBM.length ? CHARS_CBM[i] : 4;
 				break;
 			case MODE_CPM:
-				wdt = COLWIDTH_CPM[i];
+				chars = i < CHARS_CPM.length ? CHARS_CPM[i] : 4;
 				break;
 			case MODE_LOCAL:
-				wdt = COLWIDTH_LOCAL[i];
+				chars = i < CHARS_LOCAL.length ? CHARS_LOCAL[i] : 4;
 				break;
 			default:
-				wdt = 1;
+				chars = 4;
 			}
-			var col = new TableColumn(i, wdt);
+			var col = new TableColumn(i);
+			if (chars < 0) {
+				// flexible column takes all the extra space when the window is resized
+				col.setMinWidth(60);
+				col.setPreferredWidth(220);
+				col.setMaxWidth(Integer.MAX_VALUE);
+			} else {
+				int w = Math.max(30, chars * size + 8);
+				col.setMinWidth(w);
+				col.setMaxWidth(w);
+				col.setPreferredWidth(w);
+			}
 			col.setHeaderValue(getColumnName(i));
 			columnModel.addColumn(col);
 		}

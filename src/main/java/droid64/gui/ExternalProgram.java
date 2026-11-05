@@ -103,12 +103,138 @@ public class ExternalProgram {
 		return buildArguments(sourceImage, target, imagefiles, files, directory, imageType);
 	}
 
+	/**
+	 * VICE emulators are started from the paths set on the VICE settings tab.
+	 * A macOS application bundle (.app) is resolved to the executable inside it.
+	 */
+	static String resolveCommand(String cmd) {
+		Setting setting = null;
+		String exe = cmd;
+		switch (cmd) {
+		case "x64sc":
+		case "x64":
+			setting = Setting.VICE_X64;
+			exe = "x64sc";
+			break;
+		case "x128":
+			setting = Setting.VICE_X128;
+			break;
+		case "xplus4":
+			setting = Setting.VICE_XPLUS4;
+			break;
+		case "xvic":
+			setting = Setting.VICE_XVIC;
+			break;
+		case "cbmctrl":
+		case "d64copy":
+			var bundled = bundledOpenCbm();
+			return bundled != null ? new File(bundled, cmd).getPath() : cmd;
+		default:
+			return cmd;
+		}
+		var found = findVice(setting.getString(), exe);
+		if (found == null && "x64sc".equals(exe)) {
+			found = findVice(setting.getString(), "x64");
+		}
+		return found != null ? found.getPath() : (setting.getString() == null || setting.getString().trim().isEmpty() ? cmd : setting.getString().trim());
+	}
+
+	/**
+	 * Find the executable of a VICE emulator.
+	 * @param configured the path from the VICE settings (an executable, an .app, or the folder with them), may be empty
+	 * @param exe name of the emulator: x64sc, x128, xplus4, xvic
+	 * @return the executable, or null if it was not found
+	 */
+	static File findVice(String configured, String exe) {
+		var places = new ArrayList<File>();
+		if (configured != null && !configured.trim().isEmpty()) {
+			places.add(new File(configured.trim()));
+		}
+		var home = System.getProperty("user.home");
+		for (var dir : new String[] { "/Applications", "/Applications/VICE", "/Applications/vice", home + "/Applications",
+				home + "/Applications/VICE", "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin" }) {
+			places.add(new File(dir));
+		}
+		for (var place : places) {
+			var hit = findViceIn(place, exe);
+			if (hit != null) {
+				return hit;
+			}
+		}
+		return null;
+	}
+
+	private static File findViceIn(File place, String exe) {
+		if (place.isFile()) {
+			return place;
+		}
+		if (!place.isDirectory()) {
+			return null;
+		}
+		var candidates = new ArrayList<File>();
+		if (place.getName().endsWith(".app")) {
+			candidates.add(new File(place, "Contents/MacOS/" + exe));
+		}
+		candidates.add(new File(place, exe + ".app/Contents/MacOS/" + exe));
+		candidates.add(new File(place, exe));
+		candidates.add(new File(place, "bin/" + exe));
+		candidates.add(new File(place, "VICE.app/Contents/MacOS/" + exe));
+		candidates.add(new File(place, "VICE/" + exe + ".app/Contents/MacOS/" + exe));
+		for (var c : candidates) {
+			if (c.isFile()) {
+				return c;
+			}
+		}
+		if (place.getName().endsWith(".app")) {
+			var macos = new File(place, "Contents/MacOS").listFiles();
+			if (macos != null && macos.length > 0) {
+				return macos[0];
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * On macOS a program inside an .app bundle is started with the "open" command, so that it is started
+	 * as a proper application (with its window) and not as a plain child process.
+	 */
+	static List<String> viaOpen(List<String> args, boolean mac) {
+		if (!mac || args == null || args.isEmpty()) {
+			return args;
+		}
+		var m = java.util.regex.Pattern.compile("^(.*\\.app)/Contents/MacOS/[^/]+$").matcher(args.get(0));
+		if (!m.matches()) {
+			return args;
+		}
+		var result = new ArrayList<String>();
+		result.add("/usr/bin/open");
+		result.add("-n");
+		result.add("-a");
+		result.add(m.group(1));
+		if (args.size() > 1) {
+			result.add("--args");
+			result.addAll(args.subList(1, args.size()));
+		}
+		return result;
+	}
+
+	/** @return the folder with the OpenCBM tools bundled into the application, or null. */
+	static File bundledOpenCbm() {
+		try {
+			var jar = new File(ExternalProgram.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			var dir = new File(jar.getParentFile().getParentFile(), "Resources/opencbm");
+			return new File(dir, "cbmctrl").isFile() ? dir : null;
+		} catch (Exception e) {	//NOSONAR
+			return null;
+		}
+	}
+
 	private List<String> buildArguments(File sourceImage, File target, List<String> imagefiles, List<String> files, File directory, DiskImageType imageType) {
 		var args = new ArrayList<String>();
 		if (Utility.isEmpty(command)) {
 			return args;
 		}
-		args.add(command);
+		args.add(resolveCommand(command));
 		for (String s : arguments.split("\\s+")) {
 			switch (s) {
 			case IMAGE:
@@ -126,6 +252,8 @@ public class ExternalProgram {
 					args.addAll(imagefiles);
 				} else if (sourceImage != null && sourceImage.exists() && sourceImage.isFile()) {
 					args.add(sourceImage.getPath());
+				} else if (!files.isEmpty() && new File(files.get(0)).isFile()) {
+					args.add(files.get(0));
 				}
 				break;
 			case TARGET:
@@ -166,7 +294,8 @@ public class ExternalProgram {
 	 * @param execArgs arguments as parsed by {@link #getExecute(File, List, File, File, DiskImageType)}
 	 * @param mainPanel used to log output from command
 	 */
-	public void runProgram(final File imageFile, final List<String> execArgs, final MainPanel mainPanel) {
+	public void runProgram(final File imageFile, final List<String> givenArgs, final MainPanel mainPanel) {
+		final var execArgs = givenArgs;
 		if (execArgs == null || execArgs.isEmpty()) {
 			mainPanel.appendConsole("No command to execute!");
 		}
@@ -190,8 +319,84 @@ public class ExternalProgram {
 		}
 	}
 
-	private static int runProgramThread(File folder, List<String> execArgs, MainPanel mainPanel) {
-		return runProgramThread(folder, execArgs, mainPanel::appendConsole, mainPanel::appendConsole);
+	/**
+	 * A VICE that is already running (even with its window closed) takes the new image from the command line
+	 * and ignores it. So a running emulator is closed before the next one is started.
+	 * @return true if a running emulator was closed
+	 */
+	static boolean stopRunningEmulator(List<String> execArgs, boolean mac, Consumer<String> log) {
+		if (!mac || execArgs == null || execArgs.isEmpty()) {
+			return false;
+		}
+		var name = new File(execArgs.get(0)).getName();
+		if (!java.util.Arrays.asList("x64sc", "x64", "x128", "xplus4", "xvic").contains(name)) {
+			return false;
+		}
+		try {
+			if (new ProcessBuilder("/usr/bin/pgrep", "-x", name).start().waitFor() != 0) {
+				return false;
+			}
+			log.accept("Closing the running " + name + " first.");
+			new ProcessBuilder("/usr/bin/pkill", "-x", name).start().waitFor();
+			for (int i = 0; i < 30; i++) {
+				Thread.sleep(100);
+				if (new ProcessBuilder("/usr/bin/pgrep", "-x", name).start().waitFor() != 0) {
+					return true;
+				}
+			}
+			new ProcessBuilder("/usr/bin/pkill", "-9", "-x", name).start().waitFor();
+			Thread.sleep(300);
+			return true;
+		} catch (Exception e) {	//NOSONAR
+			Thread.currentThread().interrupt();
+			return false;
+		}
+	}
+
+	private static int runProgramThread(File folder, List<String> givenArgs, MainPanel mainPanel) {
+		List<String> execArgs = givenArgs;
+		int vicePort = ViceRemote.portFor(execArgs.isEmpty() ? "" : new File(execArgs.get(0)).getName());
+		if (vicePort > 0) {
+			var file = ViceRemote.startFile(execArgs);
+			if (file != null && ViceRemote.autostart(vicePort, file, mainPanel::appendConsole)) {
+				mainPanel.appendConsole("The running emulator was reset and started " + file);
+				return 0;
+			}
+			// no emulator listens on the monitor port: close one that was started in another way, then start a new one
+			stopRunningEmulator(execArgs, System.getProperty("os.name", "").startsWith("Mac"), mainPanel::appendConsole);
+			var withMonitor = new ArrayList<String>();
+			withMonitor.add(execArgs.get(0));
+			withMonitor.addAll(ViceRemote.monitorOptions(vicePort));
+			withMonitor.addAll(execArgs.subList(1, execArgs.size()));
+			execArgs = withMonitor;
+		}
+		var output = new ArrayList<String>();
+		var errors = new ArrayList<String>();
+		long started = System.currentTimeMillis();
+		int rc = runProgramThread(folder, execArgs, line -> {
+			output.add(line);
+			mainPanel.appendConsole(line);
+		}, err -> {
+			errors.add(err.trim());
+			mainPanel.appendConsole(err);
+		});
+		var bundled = bundledOpenCbm();
+		boolean openCbm = bundled != null && !execArgs.isEmpty() && execArgs.get(0).startsWith(bundled.getPath());
+		long seconds = (System.currentTimeMillis() - started) / 1000;
+		mainPanel.appendConsole("Finished: " + execArgs.get(0) + ", exit code " + rc + ", " + seconds + " s");
+		boolean quick = rc == 0 && seconds < 2 && !execArgs.isEmpty() && new File(execArgs.get(0)).getName().startsWith("x");
+		if ((rc != 0 || quick) && !execArgs.isEmpty()) {
+			var name = new File(execArgs.get(0)).getName();
+			var text = output.isEmpty() ? (quick ? "The program ended after " + seconds + " s without any output, exit code 0.\n" : "The command failed (exit code " + rc + "): ") + execArgs : String.join("\n", output);
+			if (!openCbm && output.isEmpty() && !quick) {
+				text = "Could not run " + execArgs.get(0) + ".\n" + (errors.isEmpty() ? text : String.join("\n", errors))
+						+ (name.startsWith("x") ? "\n\nCheck the path of the VICE emulator in Settings, on the VICE tab." : "");
+			}
+			final var message = text;
+			javax.swing.SwingUtilities.invokeLater(() ->
+					GuiHelper.showErrorMessage(mainPanel.getParent(), openCbm ? "OpenCBM" : name, "%s", message));
+		}
+		return rc;
 	}
 
 	/**
@@ -204,12 +409,17 @@ public class ExternalProgram {
 	public static int runProgramThread(File folder, List<String> execArgs, Consumer<String> outputConsumer, Consumer<String> errorConsumer) {
 		int returnCode=1;
 		try {
-			var process = new ProcessBuilder()
+			var builder = new ProcessBuilder()
 					.directory(folder != null ? folder : new File("."))
 					.redirectOutput(Redirect.PIPE)
 					.redirectErrorStream(true)
-					.command(execArgs)
-					.start();
+					.command(execArgs);
+			var bundled = bundledOpenCbm();
+			if (bundled != null && !execArgs.isEmpty() && execArgs.get(0).startsWith(bundled.getPath())) {
+				// the bundled OpenCBM finds its configuration and plugin here
+				builder.environment().put("OPENCBM_HOME", bundled.getPath());
+			}
+			var process = builder.start();
 			try (var br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
 				String line;
 				while ((line = br.readLine()) != null) {

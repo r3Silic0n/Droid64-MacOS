@@ -106,6 +106,11 @@ public class Utility {
 			0xb0, 0xb1, 0xb2, 0xb3,	0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,	// f0-ff
 			0x7e
 	};
+	/** @return the character code in the Commodore font that shows this PETSCII byte */
+	public static int petsciiGlyph(int petscii) {
+		return PETSCII_TABLE[petscii & 0xff];
+	}
+
 	/** Valid characters when mapping from PC to CBM file names */
 	private static final String VALID_PC_CBM_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 []()/;:<>.-_+&%$@#!\u00a0";
 	/** Valid characters when mapping from CBM to PC file names */

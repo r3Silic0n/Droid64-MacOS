@@ -12,6 +12,7 @@ public class ImagePanel extends JPanel {
 	private static final long serialVersionUID = 1L;
 	private transient BufferedImage image;
 	private String name;
+	private int scale = 1;
 
 	public ImagePanel() {
 		image = new BufferedImage(320, 200, BufferedImage.TYPE_INT_RGB);
@@ -35,7 +36,7 @@ public class ImagePanel extends JPanel {
 	@Override
 	protected void paintComponent(Graphics g) {
 		super.paintComponent(g);
-		g.drawImage(image, 0, 0, this);
+		g.drawImage(image, 0, 0, image.getWidth() * scale, image.getHeight() * scale, this);
 	}
 
 	public void setImage(CbmPicture picture) throws IOException {
@@ -61,12 +62,19 @@ public class ImagePanel extends JPanel {
 	}
 
 	private void update() {
-		var dim = new Dimension(image.getWidth(), image.getHeight());
+		var dim = new Dimension(image.getWidth() * scale, image.getHeight() * scale);
 		setSize(dim);
 		setMinimumSize(dim);
 		setPreferredSize(dim);
 		invalidate();
 		repaint();
+	}
+
+	/** @param scale display zoom, 1 = real pixels */
+	public void setScale(int scale) {
+		this.scale = Math.max(1, scale);
+		update();
+		revalidate();
 	}
 
 	@Override

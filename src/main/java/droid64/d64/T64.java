@@ -133,17 +133,11 @@ public class T64 extends DiskImage {
 			if (cbmDisk.length <  dataEnd || dataStart < 0) {
 				throw new CbmException("T64 file ["+number+"] ends at 0x"+Integer.toHexString(dataEnd)+" outside image of size "+Integer.toHexString(cbmDisk.length)+'.');
 			}
-			byte[] data = new byte[cf.getSizeInBytes()];
-			if (cf.getSizeInBytes() <= 0) {
-				return data;
-			}
-			// first two bytes stored as loadAddr
+			// the T64 entry holds the program without its load address, the PRG file is two bytes longer
+			byte[] data = new byte[cf.getSizeInBytes() + 2];
 			data[0] = (byte) (cf.getLoadAddr() & 0xff);
-			if (cf.getSizeInBytes() < 2) {
-				return data;
-			}
 			data[1] = (byte) ((cf.getLoadAddr() >>> 8) & 0xff);
-			Utility.copyBytes(cbmDisk, data, dataStart, 2, cf.getSizeInBytes() - 2);
+			Utility.copyBytes(cbmDisk, data, dataStart, 2, cf.getSizeInBytes());
 			return data;
 		} else {
 			throw new CbmException("T64 file number "+number+" does not exist.");

@@ -61,6 +61,15 @@ class FilePathPanel extends JPanel {
 		listeners.add(consumer);
 	}
 
+	/** Notify about every edit of the path text field (typing, pasting). */
+	public void addTextListener(Consumer<String> consumer) {
+		path.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+			@Override public void insertUpdate(javax.swing.event.DocumentEvent e) { consumer.accept(path.getText()); }
+			@Override public void removeUpdate(javax.swing.event.DocumentEvent e) { consumer.accept(path.getText()); }
+			@Override public void changedUpdate(javax.swing.event.DocumentEvent e) { consumer.accept(path.getText()); }
+		});
+	}
+
 	public void setFileFilter(FileFilter filter) {
 		this.fileFilter = filter;
 	}
@@ -77,6 +86,10 @@ class FilePathPanel extends JPanel {
 	 * @return File with selected path, or null if nothing was selected.
 	 */
 	private File openDialog(File directory, int mode) {
+		if (NativeFileDialog.IS_MAC) {
+			return NativeFileDialog.choose(this, "Choose", directory, null, false, mode == JFileChooser.DIRECTORIES_ONLY,
+					fileFilter == null ? null : (d, n) -> fileFilter.accept(new File(d, n)));
+		}
 		var chooser = new JFileChooser(directory);
 		chooser.setFileSelectionMode(mode);
 		chooser.setMultiSelectionEnabled(false);

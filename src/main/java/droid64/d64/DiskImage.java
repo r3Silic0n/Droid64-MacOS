@@ -643,6 +643,9 @@ public abstract class DiskImage implements Serializable {
 		} else if (this instanceof D81) {
 			imageFormat = DiskImageType.D81;
 			geosFormat = DOS_LABEL_GEOS.equals(getStringFromBlock(D81.HEADER_TRACK, D81.HEADER_SECT, 0xad, DOS_LABEL_GEOS.length()));
+		} else if (this instanceof Tap) {
+			imageFormat = DiskImageType.TAP;
+			geosFormat = false;
 		} else if (this instanceof T64) {
 			imageFormat = DiskImageType.T64;
 			geosFormat = false;
@@ -887,6 +890,21 @@ public abstract class DiskImage implements Serializable {
 		verifyTrackSector(track, sector);
 		int pos = getSectorOffset(track, sector);
 		return Arrays.copyOfRange(cbmDisk, pos, pos + BLOCK_SIZE);
+	}
+
+	/**
+	 * Overwrite a whole block. The change is only in memory until the image is saved.
+	 * @param track track
+	 * @param sector sector
+	 * @param data BLOCK_SIZE bytes
+	 * @throws CbmException when the track/sector is not valid or data has the wrong length
+	 */
+	public void writeBlock(int track, int sector, byte[] data) throws CbmException {
+		verifyTrackSector(track, sector);
+		if (data == null || data.length != BLOCK_SIZE) {
+			throw new CbmException("A block must be " + BLOCK_SIZE + " bytes.");
+		}
+		System.arraycopy(data, 0, cbmDisk, getSectorOffset(track, sector), BLOCK_SIZE);
 	}
 
 	public void verifyTrackSector(int track, int sector) throws CbmException {

@@ -132,10 +132,48 @@ public class HexViewPanel extends JPanel {
 			add(createTrackSectorPanel(track, sector, diskImage), BorderLayout.NORTH);
 			model.setReadOnly(false);
 		} else {
-			add(new JLabel(fileName), BorderLayout.NORTH);
+			add(createFileHeader(fileName, data), BorderLayout.NORTH);
 			model.setReadOnly(true);
 		}
 		setup(data, length, fileName, readLoadAddr);
+	}
+
+	/** File name plus the first BASIC line (usually the SYS line) shown in C64 colours. */
+	private JPanel createFileHeader(String fileName, byte[] prg) {
+		var panel = new JPanel(new BorderLayout());
+		panel.add(new JLabel(fileName), BorderLayout.NORTH);
+		var line = firstBasicLine(prg);
+		if (line != null) {
+			var label = new JLabel(" " + line + " ");
+			label.setOpaque(true);
+			label.setBackground(Setting.DIR_BG.getColor());
+			label.setForeground(Setting.DIR_FG.getColor());
+			var font = Setting.CBM_FONT.getFont();
+			label.setFont(font != null ? font.deriveFont(12f) : label.getFont());
+			label.setBorder(javax.swing.BorderFactory.createEmptyBorder(2, 6, 2, 6));
+			panel.add(label, BorderLayout.CENTER);
+		}
+		return panel;
+	}
+
+	private static String firstBasicLine(byte[] prg) {
+		if (prg == null || prg.length < 8) {
+			return null;
+		}
+		int load = (prg[0] & 0xff) | ((prg[1] & 0xff) << 8);
+		if (load != 0x0801 && load != 0x1001 && load != 0x0401 && load != 0x2001 && load != 0x1C01 && load != 0x4001) {
+			return null;
+		}
+		int next = (prg[2] & 0xff) | ((prg[3] & 0xff) << 8);
+		if (next <= load || next > load + prg.length) {
+			return null;
+		}
+		var text = droid64.d64.BasicParser.parseCbmBasicPrg(prg);
+		if (text == null || text.isEmpty()) {
+			return null;
+		}
+		var line = text.split("\n")[0].trim();
+		return line.isEmpty() ? null : line;
 	}
 
 	public void showDialog() {
@@ -182,7 +220,7 @@ public class HexViewPanel extends JPanel {
 		setSize(table.getWidth(), table.getHeight());
 		addHierarchyListener(e -> GuiHelper.hierarchyListenerResizer(SwingUtilities.getWindowAncestor(this)));
 
-		table.changeSelection(0, 1, false, false);
+		table.clearSelection();	// no row is highlighted until the user clicks
 		table.requestFocus();
 	}
 
@@ -331,8 +369,15 @@ public class HexViewPanel extends JPanel {
 		applyButton.setMnemonic('a');
 		applyButton.addActionListener(ae-> applyData());
 
+		var textButton = new JButton("View Text");
+		textButton.setToolTipText("Show the file as plain text");
+		textButton.addActionListener(ae -> new TextViewPanel(mainPanel).show(data, DroiD64.PROGNAME, fileName));
+
 		var buttonPanel = new JPanel();
 		buttonPanel.add(modeButton);
+		if (diskImage == null && fileName != null && !fileName.isEmpty()) {
+			buttonPanel.add(textButton);
+		}
 		buttonPanel.add(c64ModeButton);
 		buttonPanel.add(printButton);
 		buttonPanel.add(saveButton);
@@ -502,9 +547,9 @@ public class HexViewPanel extends JPanel {
 	private static class CustomCellRenderer extends DefaultTableCellRenderer {
 
 		private enum HexColor {
-			ADDR_SELECTED(Color.BLACK, new Color(100, 100, 100)),
-			ASCII_SELECTED(Color.BLACK, new Color(100, 100, 100)),
-			HEX_SELECTED(Color.BLACK, new Color(232, 232, 232)),
+			ADDR_SELECTED(Color.BLACK, new Color(150, 195, 255)),
+			ASCII_SELECTED(Color.BLACK, new Color(150, 195, 255)),
+			HEX_SELECTED(Color.BLACK, new Color(205, 226, 255)),
 			ADDR(Color.BLACK, new Color(200, 200, 200)),
 			ASCII(Color.BLACK, new Color(200, 200, 200)),
 			HEX(new Color(0, 0, 80), Color.WHITE);

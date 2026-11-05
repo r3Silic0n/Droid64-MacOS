@@ -85,13 +85,15 @@ public class SettingsPanel extends JPanel {
 	// GUI
 	private final JCheckBox exitConfirmCheckBox = new JCheckBox(
 			Utility.getMessage(Resources.DROID64_SETTINGS_CONFIRMEXIT));
+	private final JCheckBox rememberWindowCheckBox = new JCheckBox(
+			Utility.getMessage(Resources.DROID64_SETTINGS_REMEMBERWINDOW));
 	private final JCheckBox hideConsoleCheckBox = new JCheckBox(
 			Utility.getMessage(Resources.DROID64_SETTINGS_HIDECONSOLE));
 	private final JCheckBox bookmarkBarCheckBox = new JCheckBox(
 			Utility.getMessage(Resources.DROID64_SETTINGS_BOOKMARKBAR));
 	private final JComboBox<UIManager.LookAndFeelInfo> lookAndFeelBox = new JComboBox<>(UIManager.getInstalledLookAndFeels());
 	private final JSpinner rowHeightSpinner = new JSpinner(
-			new SpinnerNumberModel((int) Setting.ROW_HEIGHT.getInteger(), 8, 256, 1));
+			new SpinnerNumberModel((int) Setting.ROW_HEIGHT.getInteger(), 4, 256, 1));
 	private final JSpinner localRowHeightSpinner = new JSpinner(
 			new SpinnerNumberModel((int) Setting.LOCAL_ROW_HEIGHT.getInteger(), 8, 256, 1));
 	private final JTextField winSizePosField = new JTextField(getWindowSizePosString());
@@ -137,12 +139,12 @@ public class SettingsPanel extends JPanel {
 			Setting.FILE_EXT_T64_GZ.getList().stream().collect(Collectors.joining(Setting.DELIM)));
 	// Colors
 	private final JComboBox<String> colourBox = new JComboBox<>(COLORS);
-	private final JButton colorFgButton = new JButton(LBL_FOREGROUND);
-	private final JButton colorBgButton = new JButton(LBL_BACKGROUND);
-	private final JButton colorCpmFgButton = new JButton(LBL_FOREGROUND);
-	private final JButton colorCpmBgButton = new JButton(LBL_BACKGROUND);
-	private final JButton colorLocalFgButton = new JButton(LBL_FOREGROUND);
-	private final JButton colorLocalBgButton = new JButton(LBL_BACKGROUND);
+	private final JButton colorFgButton = new FlatStyle.Button(LBL_FOREGROUND);
+	private final JButton colorBgButton = new FlatStyle.Button(LBL_BACKGROUND);
+	private final JButton colorCpmFgButton = new FlatStyle.Button(LBL_FOREGROUND);
+	private final JButton colorCpmBgButton = new FlatStyle.Button(LBL_BACKGROUND);
+	private final JButton colorLocalFgButton = new FlatStyle.Button(LBL_FOREGROUND);
+	private final JButton colorLocalBgButton = new FlatStyle.Button(LBL_BACKGROUND);
 
 	private Font cbmFont = Setting.CBM_FONT.getFont();
 	private Font sysFont = Setting.SYS_FONT.getFont();
@@ -208,6 +210,7 @@ public class SettingsPanel extends JPanel {
 		setLayout(new BorderLayout());
 		var tabPane = new JTabbedPane();
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_GUI), new JScrollPane(drawGuiPanel()));
+		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_VICE), new JScrollPane(drawVicePanel()));
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_FILES), new JScrollPane(drawFilesPanel()));
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_COLORS), new JScrollPane(drawColorPanel()));
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_DATABASE), new JScrollPane(drawDatabasePanel()));
@@ -249,6 +252,74 @@ public class SettingsPanel extends JPanel {
 		return generalPanel;
 	}
 	
+	/** Paths to the VICE emulators started by the VICE buttons. */
+	private JPanel drawVicePanel() {
+		var panel = new JPanel(new GridBagLayout());
+		var gbc = new GridBagConstraints();
+		gbc.fill = GridBagConstraints.HORIZONTAL;
+		gbc.insets = new java.awt.Insets(3, 4, 3, 4);
+		System.setProperty("apple.awt.use-file-dialog-packages", "true");
+		var names = new String[] { "VICE 64 (x64sc)", "VICE 128 (x128)", "VICE Plus/4 (xplus4)", "VICE VC20 (xvic)" };
+		var settings = new Setting[] { Setting.VICE_X64, Setting.VICE_X128, Setting.VICE_XPLUS4, Setting.VICE_XVIC };
+		for (int i = 0; i < names.length; i++) {
+			final var setting = settings[i];
+			var current = setting.getString();
+			var fp = new FilePathPanel(new File(current == null ? "" : current), JFileChooser.FILES_ONLY,
+					f -> setting.set(f.getPath()));
+			fp.setToolTipText("Path to the emulator, or to its .app bundle. Leave empty to use the command from the PATH.");
+			// typed or pasted paths count too
+			fp.addTextListener(text -> setting.set(text));
+			GuiHelper.addToGridBag(0, i, 0.0, 0.0, 1, gbc, panel, new JLabel(names[i]));
+			GuiHelper.addToGridBag(1, i, 1.0, 0.0, 1, gbc, panel, fp);
+		}
+		// HVSC: the collection has to exist on this machine
+		var hv = new FilePathPanel(new File(Setting.HVSC_DIR.getString() == null ? "" : Setting.HVSC_DIR.getString()),
+				JFileChooser.DIRECTORIES_ONLY, f -> Setting.HVSC_DIR.set(f.getPath()));
+		hv.setToolTipText("Folder of your local HVSC (High Voltage SID Collection): the one containing DOCUMENTS/Songlengths.md5, or the C64Music folder. "
+				+ "The music player uses it to recognise SID files, to get the real tune lengths and the STIL information. Leave empty to switch it off.");
+		hv.addTextListener(text -> Setting.HVSC_DIR.set(text));
+		GuiHelper.addToGridBag(0, names.length, 0.0, 0.0, 1, gbc, panel, new JLabel("HVSC folder (C64Music)"));
+		GuiHelper.addToGridBag(1, names.length, 1.0, 0.0, 1, gbc, panel, hv);
+		// updates
+		var mirrors = new JTextField(Setting.HVSC_MIRRORS.getString(), 40);
+		mirrors.setToolTipText("Download folders of the HVSC (separated by ;). They must contain HVSC_Update_NN.7z and HVSC_NN-all-of-it.7z.");
+		mirrors.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+			@Override
+			public void insertUpdate(javax.swing.event.DocumentEvent e) {
+				Setting.HVSC_MIRRORS.set(mirrors.getText());
+			}
+
+			@Override
+			public void removeUpdate(javax.swing.event.DocumentEvent e) {
+				Setting.HVSC_MIRRORS.set(mirrors.getText());
+			}
+
+			@Override
+			public void changedUpdate(javax.swing.event.DocumentEvent e) {
+				Setting.HVSC_MIRRORS.set(mirrors.getText());
+			}
+		});
+		GuiHelper.addToGridBag(0, names.length + 1, 0.0, 0.0, 1, gbc, panel, new JLabel("HVSC download mirrors"));
+		GuiHelper.addToGridBag(1, names.length + 1, 1.0, 0.0, 1, gbc, panel, mirrors);
+		var buttons = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 0));
+		var hvscUpdate = new javax.swing.JButton("Update HVSC");
+		hvscUpdate.addActionListener(e -> UpdateDialog.updateHvsc(this));
+		var hvscFull = new javax.swing.JButton("Download full HVSC...");
+		hvscFull.addActionListener(e -> UpdateDialog.downloadFullHvsc(this));
+		var viceUpdate = new javax.swing.JButton("Install / update VICE");
+		viceUpdate.addActionListener(e -> UpdateDialog.updateVice(this));
+		buttons.add(hvscUpdate);
+		buttons.add(hvscFull);
+		buttons.add(viceUpdate);
+		GuiHelper.addToGridBag(0, names.length + 2, 0.0, 0.0, 1, gbc, panel, new JLabel("Updates"));
+		GuiHelper.addToGridBag(1, names.length + 2, 1.0, 0.0, 1, gbc, panel, buttons);
+		var auto = new javax.swing.JCheckBox("Check for HVSC and VICE updates at startup (once a day)", Boolean.TRUE.equals(Setting.UPDATE_AUTO.getBoolean()));
+		auto.addActionListener(e -> Setting.UPDATE_AUTO.set(auto.isSelected()));
+		GuiHelper.addToGridBag(1, names.length + 3, 1.0, 0.0, 1, gbc, panel, auto);
+		GuiHelper.addToGridBag(0, names.length + 4, 1.0, 0.8, 2, gbc, panel, new JPanel());
+		return panel;
+	}
+
 	private JPanel drawFilesPanel() {
 		var guiPanel = new JPanel(new GridBagLayout());
 		var gbc = new GridBagConstraints();
@@ -314,6 +385,8 @@ public class SettingsPanel extends JPanel {
 
 		exitConfirmCheckBox.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_CONFIRMEXIT_TOOLTIP));
 		exitConfirmCheckBox.setSelected(Setting.ASK_QUIT.getBoolean());
+		rememberWindowCheckBox.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_REMEMBERWINDOW_TOOLTIP));
+		rememberWindowCheckBox.setSelected(Boolean.TRUE.equals(Setting.REMEMBER_WINDOW.getBoolean()));
 
 		hideConsoleCheckBox.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_HIDECONSOLE_TOOLTIP));
 		hideConsoleCheckBox.setSelected(Setting.HIDECONSOLE.getBoolean());
@@ -323,7 +396,9 @@ public class SettingsPanel extends JPanel {
 		lookAndFeelBox.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_LOOKFEEL_TOOLTIP));
 		lookAndFeelBox.setEditable(false);
 		lookAndFeelBox.setSelectedIndex(0);
-		var laf=GuiHelper.getLookAndFeels().stream().filter(f->f.getClassName().equals(Setting.LOOK_AND_FEEL.getString())).findFirst().orElse(null);
+		final var curLaf = NativeFileDialog.IS_MAC && Setting.DEFAULT_LOOK_AND_FEEL_CLASS.equals(Setting.LOOK_AND_FEEL.getString())
+				? UIManager.getSystemLookAndFeelClassName() : Setting.LOOK_AND_FEEL.getString();
+		var laf=GuiHelper.getLookAndFeels().stream().filter(f->f.getClassName().equals(curLaf)).findFirst().orElse(null);
 		lookAndFeelBox.setSelectedItem(laf);
 
 		rowHeightSpinner.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_GRIDSPACING_TOOLTIP));
@@ -337,10 +412,28 @@ public class SettingsPanel extends JPanel {
 		fontSizeSpinner.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_FONTSIZE_TOOLTIP));
 		localFontSizeSpinner.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_FONTSIZE_TOOLTIP));
 
-		fontSizeSpinner.addChangeListener(
-				event -> Setting.FONT_SIZE.set(Integer.parseInt(fontSizeSpinner.getValue().toString())));
-		localFontSizeSpinner.addChangeListener(
-				event -> Setting.LOCAL_FONT_SIZE.set(Integer.parseInt(localFontSizeSpinner.getValue().toString())));
+		// Changes are applied immediately, no need to confirm the dialog.
+		fontSizeSpinner.addChangeListener(event -> {
+			int size = Integer.parseInt(fontSizeSpinner.getValue().toString());
+			Setting.FONT_SIZE.set(size);
+			// keep the C64 font cell square: row pitch = 25/32 of the font size
+			rowHeightSpinner.setValue(Math.max(4, Math.round(size * 25f / 32f)));
+			mainPanel.refreshLists();
+		});
+		localFontSizeSpinner.addChangeListener(event -> {
+			int size = Integer.parseInt(localFontSizeSpinner.getValue().toString());
+			Setting.LOCAL_FONT_SIZE.set(size);
+			localRowHeightSpinner.setValue(Math.max(8, size + 6));
+			mainPanel.refreshLists();
+		});
+		rowHeightSpinner.addChangeListener(event -> {
+			Setting.ROW_HEIGHT.set(Integer.parseInt(rowHeightSpinner.getValue().toString()));
+			mainPanel.refreshLists();
+		});
+		localRowHeightSpinner.addChangeListener(event -> {
+			Setting.LOCAL_ROW_HEIGHT.set(Integer.parseInt(localRowHeightSpinner.getValue().toString()));
+			mainPanel.refreshLists();
+		});
 
 		var getWinSizeButton = new JButton(Utility.getMessage(Resources.DROID64_SETTINGS_WINDOWSIZE_FETCH));
 		getWinSizeButton.addActionListener(ae -> {
@@ -451,6 +544,7 @@ public class SettingsPanel extends JPanel {
 
 		var checkboxPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		checkboxPanel.add(exitConfirmCheckBox);
+		checkboxPanel.add(rememberWindowCheckBox);
 		checkboxPanel.add(hideConsoleCheckBox);
 		checkboxPanel.add(bookmarkBarCheckBox);
 
@@ -486,6 +580,7 @@ public class SettingsPanel extends JPanel {
 
 	private void copyValuesToSettings(final MainPanel mainPanel) {
 		Setting.ASK_QUIT.set(exitConfirmCheckBox.isSelected());
+		Setting.REMEMBER_WINDOW.set(rememberWindowCheckBox.isSelected());
 		Setting.BOOKMARK_BAR.set(bookmarkBarCheckBox.isSelected());
 		Setting.HIDECONSOLE.set(hideConsoleCheckBox.isSelected());
 		Setting.COLOUR.set(colourBox.getSelectedIndex());
@@ -584,14 +679,14 @@ public class SettingsPanel extends JPanel {
 		setupColorButton(Setting.DIR_CPM_FG, Setting.DIR_CPM_BG, colorCpmFgButton, colorCpmBgButton);
 		setupColorButton(Setting.DIR_LOCAL_FG, Setting.DIR_LOCAL_BG, colorLocalFgButton, colorLocalBgButton);
 
-		var colorActiveBorderButton = new JButton(Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_ACTIVE));
+		var colorActiveBorderButton = FlatStyle.Button.withBorder(Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_ACTIVE));
 		colorActiveBorderButton.setBorder(BorderFactory.createLineBorder(Setting.BORDER_ACTIVE.getColor(), 3));
 		colorActiveBorderButton.addActionListener(ae -> {
 			var c = JColorChooser.showDialog(colorActiveBorderButton, LBL_FOREGROUND, Setting.BORDER_ACTIVE.getColor());
 			colorActiveBorderButton.setBorder(BorderFactory.createLineBorder(c));
 			Setting.BORDER_ACTIVE.set(c);
 		});
-		var colorInactiveBorderButton = new JButton(Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_INACTIVE));
+		var colorInactiveBorderButton = FlatStyle.Button.withBorder(Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_INACTIVE));
 		colorInactiveBorderButton.setBorder(BorderFactory.createLineBorder(Setting.BORDER_INACTIVE.getColor(), 3));
 		colorInactiveBorderButton.addActionListener(ae -> {
 			var c = JColorChooser.showDialog(colorInactiveBorderButton, LBL_BACKGROUND,
@@ -847,7 +942,9 @@ public class SettingsPanel extends JPanel {
 		area.setLineWrap(true);
 		area.setWrapStyleWord(true);
 		area.setToolTipText(toolTip);
-		area.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+		if (!NativeFileDialog.IS_MAC) {
+			area.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+		}
 		area.setText(Utility.EMPTY);
 		return area;
 	}
@@ -855,7 +952,9 @@ public class SettingsPanel extends JPanel {
 	private JTextField getTextField(String toolTipPropertyKey) {
 		var field = new JTextField();
 		field.setToolTipText(Utility.getMessage(toolTipPropertyKey));
-		field.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+		if (!NativeFileDialog.IS_MAC) {
+			field.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+		}
 		field.setText(Utility.EMPTY);
 		return field;
 	}

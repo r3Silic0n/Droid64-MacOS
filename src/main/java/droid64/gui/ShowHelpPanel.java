@@ -69,7 +69,7 @@ public class ShowHelpPanel extends JPanel {
 		add(imagePanel, BorderLayout.NORTH);
 		add(new JScrollPane(messageTextArea), BorderLayout.CENTER);
 
-		GuiHelper.setPreferredSize(this, 3, 2);
+		setPreferredSize(new java.awt.Dimension(700, 680));
 		addHierarchyListener(e -> GuiHelper.hierarchyListenerResizer(SwingUtilities.getWindowAncestor(this)));
 	}
 

@@ -935,6 +935,13 @@ public class D64 extends DiskImage {
 				}
 			}
 		}
+		// sectors may have been repaired above, so count the free sectors again
+		freeSectors = 0;
+		for (int sec = 0; sec < getMaxSectors(trk); sec++) {
+			if (isSectorFree(trk, sec)) {
+				freeSectors++;
+			}
+		}
 		int bamFreeSectors = getCbmDiskValue(bamOffset + trk * 4);
 		if (freeSectors != bamFreeSectors) {
 			if (repairList != null && repairList.contains(ValidationError.Error.ERROR_BAM_FREE_SECTOR_MISMATCH)) {

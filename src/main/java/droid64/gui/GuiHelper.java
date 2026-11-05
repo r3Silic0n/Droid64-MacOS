@@ -156,6 +156,9 @@ public class GuiHelper {
 	}
 
 	public static void setDefaultFonts() {
+		if (NativeFileDialog.IS_MAC) {
+			return;	// use the native macOS system fonts
+		}
 		var plainFont = new Font("Verdana", Font.PLAIN, Setting.LOCAL_FONT_SIZE.getInteger());
 		var boldFont = new Font("Verdana", Font.BOLD, Setting.LOCAL_FONT_SIZE.getInteger());
 		UIManager.put("Button.font",            new FontUIResource(plainFont));

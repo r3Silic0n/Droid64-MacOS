@@ -15,6 +15,8 @@ public class Resources {
 	public static final String DROID64_BUTTON_LOADDISK = "droid64.button.loaddisk";
 	public static final String DROID64_BUTTON_NEWDISK = "droid64.button.newdisk";
 	public static final String DROID64_BUTTON_NEWFILE = "droid64.button.newfile";
+	public static final String DROID64_BUTTON_MOVE = "droid64.button.move";
+	public static final String DROID64_BUTTON_DIRART = "droid64.button.dirart";
 	public static final String DROID64_BUTTON_MKDIR = "droid64.button.mkdir";
 	public static final String DROID64_BUTTON_MD5 = "droid64.button.md5";
 	public static final String DROID64_BUTTON_SEARCH = "droid64.button.search";
@@ -27,7 +29,7 @@ public class Resources {
 	public static final String DROID64_BUTTON_UP = "droid64.button.up";
 	public static final String DROID64_BUTTON_VALIDATE = "droid64.button.validate";
 	public static final String DROID64_BUTTON_VIEWBASIC = "droid64.button.viewbasic";
-	public static final String DROID64_BUTTON_VIEWHEX = "droid64.button.viewhex";
+	public static final String DROID64_BUTTON_PLAYMUSIC = "droid64.button.playmusic";
 	public static final String DROID64_BUTTON_VIEWIMAGE = "droid64.button.viewimage";
 	public static final String DROID64_BUTTON_VIEWTEXT = "droid64.button.viewtext";
 	public static final String DROID64_BUTTON_MIRROR = "droid64.button.mirror";
@@ -97,6 +99,7 @@ public class Resources {
 	public static final String DROID64_SETTINGS_FOREGROUND = "droid64.settings.foreground";
 	public static final String DROID64_SETTINGS_BACKGROUND = "droid64.settings.background";
 	public static final String DROID64_SETTINGS_TAB_GUI = "droid64.settings.tab.gui";
+	public static final String DROID64_SETTINGS_TAB_VICE = "droid64.settings.tab.vice";
 	public static final String DROID64_SETTINGS_TAB_FILES = "droid64.settings.tab.files";
 	public static final String DROID64_SETTINGS_TAB_COLORS = "droid64.settings.tab.colors";
 	public static final String DROID64_SETTINGS_TAB_DATABASE = "droid64.settings.tab.database";
@@ -117,6 +120,8 @@ public class Resources {
 	public static final String DROID64_SETTINGS_EXT_D88 = "droid64.settings.ext.d88";
 	public static final String DROID64_SETTINGS_EXT_T64 = "droid64.settings.ext.t64";
 	public static final String DROID64_SETTINGS_EXT_LNX = "droid64.settings.ext.lnx";
+	public static final String DROID64_SETTINGS_REMEMBERWINDOW = "droid64.settings.rememberwindow";
+	public static final String DROID64_SETTINGS_REMEMBERWINDOW_TOOLTIP = "droid64.settings.rememberwindow.tooltip";
 	public static final String DROID64_SETTINGS_CONFIRMEXIT = "droid64.settings.confirmexit";
 	public static final String DROID64_SETTINGS_CONFIRMEXIT_TOOLTIP = "droid64.settings.confirmexit.tooltip";
 	public static final String DROID64_SETTINGS_HIDECONSOLE = "droid64.settings.hideconsole";

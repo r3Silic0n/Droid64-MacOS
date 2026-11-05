@@ -1,6 +1,8 @@
 package droid64.gui;
 
 import java.awt.BorderLayout;
+import java.awt.Toolkit;
+import java.awt.Dimension;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Insets;
@@ -142,8 +144,10 @@ public class BAMPanel extends JPanel {
 		buttonPanel.add(saveButton);
 		buttonPanel.add(closeButton);
 
-		var js = new JScrollPane(bamTable);
-		js.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
+		js = new JScrollPane(bamTable);
+		js.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		js.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+		bamTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 
 		setLayout(new BorderLayout());
 		add(diskNameLabel, BorderLayout.NORTH);
@@ -151,6 +155,8 @@ public class BAMPanel extends JPanel {
 		add(buttonPanel, BorderLayout.SOUTH);
 		addHierarchyListener(e -> GuiHelper.hierarchyListenerResizer(SwingUtilities.getWindowAncestor(this)));
 	}
+
+	private JScrollPane js;
 
 	private void editMode(boolean editable) {
 		allocateSelected.setVisible(editable);
@@ -184,15 +190,37 @@ public class BAMPanel extends JPanel {
 		this.editModeButton.setEnabled(writable);
 		this.viewModeButton.setEnabled(writable);
 
-		diskNameLabel.setText(diskName);
+		// disk name in the C64 font and colours, like the directory list header
+		diskNameLabel.setText(" " + diskName + " ");
+		diskNameLabel.setOpaque(true);
+		diskNameLabel.setBackground(Setting.DIR_BG.getColor());
+		diskNameLabel.setForeground(Setting.DIR_FG.getColor());
+		var cbm = Setting.CBM_FONT.getFont();
+		if (cbm != null) {
+			diskNameLabel.setFont(cbm.deriveFont(12f));
+		}
+		diskNameLabel.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
 		tableModel.fireTableStructureChanged();
 
+		// compact table: small cells, sized to the whole BAM so no scrollbar is needed when it fits
+		final int rowHeight = 14;
+		final int firstColWidth = 42;
+		final int cellWidth = 20;
+		bamTable.setFont(bamTable.getFont().deriveFont(11f));
+		bamTable.setRowHeight(rowHeight);
 		var columnModel = bamTable.getColumnModel();
 		for (int i = 0; i < columnModel.getColumnCount(); i++) {
-			columnModel.getColumn(i).setMinWidth(i == 0 ? 50 : 10);
+			int w = i == 0 ? firstColWidth : cellWidth;
+			columnModel.getColumn(i).setMinWidth(w);
+			columnModel.getColumn(i).setMaxWidth(w);
+			columnModel.getColumn(i).setPreferredWidth(w);
 		}
-
-		GuiHelper.setPreferredSize(this, 2, 2);
+		int tableWidth = firstColWidth + cellWidth * Math.max(0, columnModel.getColumnCount() - 1);
+		int headerHeight = bamTable.getTableHeader().getPreferredSize().height;
+		int fullHeight = rowHeight * bamTable.getRowCount() + headerHeight + 8;
+		int maxHeight = Toolkit.getDefaultToolkit().getScreenSize().height - 260;
+		boolean needScroll = fullHeight > maxHeight;
+		js.setPreferredSize(new Dimension(tableWidth + 10 + (needScroll ? 18 : 0), Math.min(fullHeight, maxHeight)));
 		closeButton.addActionListener(e -> dialog.dispose());
 
 		dialog.setTitle(DroiD64.PROGNAME + " - BAM of " + diskImage.getDiskImageType() + " disk image");

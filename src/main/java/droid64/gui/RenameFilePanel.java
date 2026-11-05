@@ -64,6 +64,16 @@ public class RenameFilePanel extends JPanel {
 	private final JLabel fileTypeLabel = new JLabel("File type:");
 	private final JFormattedTextField sizeField = GuiHelper.getNumField(0, Integer.MAX_VALUE, 0, 4);
 	private final Component parentComponent;
+	private final JPanel batchPanel = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 2));
+	private final JComboBox<FileType> batchTypeBox = new JComboBox<>();
+	private final javax.swing.JButton batchButton = new javax.swing.JButton();
+	private int selectedCount = 0;
+	private FileType batchType = null;
+
+	/** Set the number of selected files. The batch type section is shown only when more than one. */
+	public void setSelectedCount(int count) {
+		selectedCount = count;
+	}
 
 	/**
 	 * Constructor
@@ -107,6 +117,9 @@ public class RenameFilePanel extends JPanel {
 	 */
 	public RenameResult show(String title, String fileName, FileType fileType, boolean isCbmFile, boolean createPartition) {
 
+		batchType = null;
+		batchPanel.setVisible(isCbmFile && !createPartition && selectedCount > 1);
+		batchButton.setText("Set type of all " + selectedCount + " selected files");
 		nameLengthDocument.setText(fileName);
 		nameLengthDocument.setLimit(isCbmFile ? 16 : Integer.MAX_VALUE);
 
@@ -152,6 +165,7 @@ public class RenameFilePanel extends JPanel {
 		if (fileTypeBox.getSelectedIndex() != -1) {
 			result.setFileType((FileType) fileTypeBox.getSelectedItem());
 		}
+		result.setBatchFileType(batchType);
 		result.setPartitionSectorCount((int) sizeField.getValue());
 		result.setDiskID(idField.getText());
 		return result;
@@ -210,7 +224,27 @@ public class RenameFilePanel extends JPanel {
 		GuiHelper.addToGridBag(1, 4, 0.0, 0.0, 1, gbc, this, fileTypeBox);
 		GuiHelper.addToGridBag(2, 4, 1.0, 0.0, 1, gbc, this, new JPanel());
 
-		GuiHelper.addToGridBag(0, 5, 1.0, 1.0, 3, gbc, this, new JPanel());
+		for (var ft : FileType.values()) {
+			if (ft != FileType.CBM) {
+				batchTypeBox.addItem(ft);
+			}
+		}
+		batchTypeBox.setSelectedItem(FileType.DEL);
+		batchButton.addActionListener(e -> {
+			batchType = (FileType) batchTypeBox.getSelectedItem();
+			var pane = (JOptionPane) SwingUtilities.getAncestorOfClass(JOptionPane.class, this);
+			if (pane != null) {
+				pane.setValue(JOptionPane.OK_OPTION);
+			}
+		});
+		batchPanel.setBorder(BorderFactory.createTitledBorder("All selected files"));
+		batchPanel.add(batchButton);
+		batchPanel.add(new JLabel("to"));
+		batchPanel.add(batchTypeBox);
+		batchPanel.setVisible(false);
+		GuiHelper.addToGridBag(0, 5, 0.0, 0.0, 3, gbc, this, batchPanel);
+
+		GuiHelper.addToGridBag(0, 6, 1.0, 1.0, 3, gbc, this, new JPanel());
 
 		addHierarchyListener(e -> GuiHelper.hierarchyListenerResizer(SwingUtilities.getWindowAncestor(this)));
 	}

@@ -20,7 +20,8 @@ public enum DiskImageType {
 	LNX(12, "LNX", "Lynx", "Normal Lynx archive", "2A", "1541", 0, true, LNX.class),
 	D88(13, "D88", "D88 (C8280)", "Normal D88 (C8280 8\") image", "3A", "8280", 1025024, false, D88.class),
 	D90_9060(14, "D90_9060", "D90 (C9060)", "Normal D90 (D9060) image", "3A", "9000", D90.D9060_SIZE, false, D90.class),
-	D90_9090(15, "D90_9090", "D90 (C9090)", "Normal D90 (D9090) image", "3A", "9000", D90.D9090_SIZE, false, D90.class);
+	D90_9090(15, "D90_9090", "D90 (C9090)", "Normal D90 (D9090) image", "3A", "9000", D90.D9090_SIZE, false, D90.class),
+	TAP(16, "TAP", "TAP (C1530 tape)", "TAP tape image (programs in KERNAL format are listed, read-only)", "", "1541", 0, true, Tap.class);
 
 	public final int type;
 	public final String id;

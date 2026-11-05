@@ -2,8 +2,6 @@ package droid64.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Frame;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
@@ -11,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
 import javax.swing.JDialog;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -38,9 +35,10 @@ public class ValidationPanel extends JPanel {
 	private final JButton repairButton = new JButton("Repair");
 	private final JTextArea textArea = new JTextArea();
 	private final Frame parentFrame;
+	private final JButton repairAllButton = new JButton("Repair all");
 	private final JButton closeButton = new JButton("Close");
+	private JTable errorTableRef;
 	private JDialog dialog;
-	private JCheckBox[] boxes;
 	private List<ValidationError.Error> keys;
 	private DiskPanel diskPanel;
 
@@ -65,15 +63,22 @@ public class ValidationPanel extends JPanel {
 		textArea.setLineWrap(true);
 		textArea.setEditable(false);
 
-		var errorTable = new JTable(new ValidationTableModel(), columnModel);
-		errorTable.getTableHeader().setReorderingAllowed(false);
-		errorTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		errorTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
-		errorTable.addMouseListener(new MouseAdapter() {
+		var errorTable = new JTable(new ValidationTableModel(), columnModel) {
+			private static final long serialVersionUID = 1L;
 			@Override
-			public void mousePressed(MouseEvent me) {
-				int row = errorTable.rowAtPoint(me.getPoint());
-				if (row >= 0) {
+			public void changeSelection(int rowIndex, int columnIndex, boolean toggle, boolean extend) {
+				// a click on the tick box toggles that row, like a Cmd/Ctrl click anywhere on the row
+				super.changeSelection(rowIndex, columnIndex, toggle || (columnIndex == 0 && !extend), extend);
+			}
+		};
+		errorTable.getTableHeader().setReorderingAllowed(false);
+		errorTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+		errorTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
+		errorTable.getSelectionModel().addListSelectionListener(e -> {
+			if (!e.getValueIsAdjusting()) {
+				errorTable.repaint();
+				int row = errorTable.getSelectionModel().getLeadSelectionIndex();
+				if (row >= 0 && row < keys.size() && errorTable.isRowSelected(row)) {
 					textArea.setText(getErrorDataString(keys.get(row), errorMap));
 				}
 			}
@@ -82,20 +87,28 @@ public class ValidationPanel extends JPanel {
 		repairButton.setToolTipText("Repair selected validation errors.");
 		repairButton.addActionListener(ae -> repair(errorTable, textArea));
 
+		errorTableRef = errorTable;
+		repairAllButton.setToolTipText("Tick all errors and repair them.");
+		repairAllButton.addActionListener(ae -> {
+			errorTable.selectAll();
+			repair(errorTable, textArea);
+		});
+
 		var splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
 		splitPane.setContinuousLayout(true);
 		splitPane.setTopComponent(new JScrollPane(errorTable));
 		splitPane.setBottomComponent(new JScrollPane(textArea));
+		splitPane.setResizeWeight(0.5);
 
 		var buttonPanel = new JPanel();
 		buttonPanel.add(repairButton);
+		buttonPanel.add(repairAllButton);
 		buttonPanel.add(closeButton);
 
 		setLayout(new BorderLayout());
 		add(splitPane, BorderLayout.CENTER);
 		add(buttonPanel, BorderLayout.SOUTH);
 
-		GuiHelper.setSize(this, 4, 2);
 		addHierarchyListener(e -> GuiHelper.hierarchyListenerResizer(SwingUtilities.getWindowAncestor(this)));
 	}
 
@@ -103,10 +116,20 @@ public class ValidationPanel extends JPanel {
 		this.diskPanel = diskPanel;
 		parseErrors(errors);
 		repairButton.setEnabled(!errorMap.isEmpty());
+		repairAllButton.setEnabled(!errorMap.isEmpty());
 		if (errorMap.isEmpty()) {
 			textArea.setText("No validation errors found.");
 		}
-		GuiHelper.setPreferredSize(this, 2, 2);
+		// compact window: the error list needs a few rows, the details a few more
+		setPreferredSize(new java.awt.Dimension(620, 340));
+		errorTableRef.setRowHeight(18);
+		var cm = errorTableRef.getColumnModel();
+		cm.getColumn(0).setPreferredWidth(26);
+		cm.getColumn(0).setMaxWidth(30);
+		cm.getColumn(1).setPreferredWidth(190);
+		cm.getColumn(2).setPreferredWidth(70);
+		cm.getColumn(2).setMaxWidth(90);
+		cm.getColumn(3).setPreferredWidth(300);
 		closeButton.addActionListener(e -> dialog.dispose());
 
 		dialog.setTitle("Validation errors (" + diskPanel.getDiskImageType() + ")");
@@ -122,16 +145,19 @@ public class ValidationPanel extends JPanel {
 			return;
 		}
 		var repairList = new ArrayList<ValidationError.Error>();
-		for (int i = 0; i < boxes.length; i++) {
-			if (boxes[i].isSelected()) {
-				repairList.add(keys.get(i));
+		for (int row : errorTable.getSelectedRows()) {
+			if (row < keys.size()) {
+				repairList.add(keys.get(row));
 			}
 		}
 		if (!repairList.isEmpty()) {
 			var errList = diskPanel.repairValidationErrors(repairList);
 			parseErrors(errList);
 			textArea.setText(Utility.EMPTY);
+			errorTable.clearSelection();
+			((AbstractTableModel) errorTable.getModel()).fireTableDataChanged();
 			repairButton.setEnabled(!errorMap.isEmpty());
+			repairAllButton.setEnabled(!errorMap.isEmpty());
 			errorTable.invalidate();
 			errorTable.repaint();
 		}
@@ -147,10 +173,6 @@ public class ValidationPanel extends JPanel {
 				}
 				errorMap.get(code).add(error);
 			});
-		}
-		boxes = new JCheckBox[errorMap.size()];
-		for (var i = 0; i < boxes.length; i++) {
-			boxes[i] = new JCheckBox();
 		}
 		var keyArr = errorMap.keySet().toArray(new ValidationError.Error[errorMap.size()]);
 		Arrays.sort(keyArr);
@@ -216,7 +238,7 @@ public class ValidationPanel extends JPanel {
 		public Object getValueAt(int row, int column) {
 			switch (column) {
 			case 0:
-				return Boolean.valueOf(boxes[row].isSelected());
+				return Boolean.valueOf(errorTableRef != null && errorTableRef.isRowSelected(row));
 			case 1:
 				return keys.get(row).toString();
 			case 2:
@@ -229,15 +251,8 @@ public class ValidationPanel extends JPanel {
 		}
 
 		@Override
-		public void setValueAt(Object value, int row, int column) {
-			if (value instanceof Boolean && column == 0 && row < boxes.length && boxes[row] != null) {
-				boxes[row].setSelected((Boolean) value);
-			}
-		}
-
-		@Override
 		public boolean isCellEditable(int row, int column) {
-			return column == 0;
+			return false;
 		}
 
 		@Override

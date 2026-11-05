@@ -38,6 +38,13 @@ public class FileDialogHelper {
 	 * @return chosen file name
 	 */
 	public static String openTextFileDialog(String title, File directory, String defaultName, boolean saveMode, String[] extFilter) {
+		if (NativeFileDialog.IS_MAC) {
+			var def = getDefaultFile(defaultName, extFilter);
+			var f = NativeFileDialog.choose(owner, title != null ? title : (saveMode ? "Save text file" : "Open text file"),
+					directory != null ? directory : (def != null ? def.getParentFile() : null),
+					def != null ? def.getName() : null, saveMode, false, extensionFilter(extFilter));
+			return f == null ? null : f.toString();
+		}
 		if (textFileChooser == null) {
 			textFileChooser = new JFileChooser(directory);
 			FileFilter fileFilter = getFileFilter("Text", extFilter);
@@ -63,6 +70,12 @@ public class FileDialogHelper {
 	}
 
 	public static String openFontFileDialog(String title, String directory, String defaultName, String[] extFilter) {
+		if (NativeFileDialog.IS_MAC) {
+			var def = getDefaultFile(defaultName, extFilter);
+			var f = NativeFileDialog.choose(owner, title != null ? title : "Open font file",
+					directory != null ? new File(directory) : null, def != null ? def.getName() : null, false, false, extensionFilter(extFilter));
+			return f == null ? null : f.toString();
+		}
 		if (fontFileChooser == null) {
 			fontFileChooser = new JFileChooser(directory);
 			FileFilter fileFilter = getFileFilter("TrueType Font", extFilter);
@@ -99,6 +112,16 @@ public class FileDialogHelper {
 	 * @return name of chosen image file
 	 */
 	public static File openImageFileDialog(File directory, String defaultName, boolean saveMode) {
+		if (NativeFileDialog.IS_MAC) {
+			File def = defaultName != null ? new File(defaultName) : null;
+			File dir = directory != null ? directory : (def != null ? def.getParentFile() : null);
+			return NativeFileDialog.choose(owner, saveMode ? "Save disk image" : "Load disk image", dir,
+					def != null ? def.getName() : null, saveMode, false, (d, n) -> {
+						var l = n.toLowerCase();
+						return new File(d, n).isDirectory() || Setting.getFileExtensionMap().values().stream()
+								.flatMap(List<String>::stream).anyMatch(ext -> l.endsWith(ext.toLowerCase()));
+					});
+		}
 		if (imageFileChooser == null) {
 			imageFileChooser = new JFileChooser(directory);
 			FileFilter fileFilter = getDiskImageFileFilter();
@@ -127,6 +150,21 @@ public class FileDialogHelper {
 			}
 		}
 		return null;
+	}
+
+	private static java.io.FilenameFilter extensionFilter(String[] extFilter) {
+		if (extFilter == null || extFilter.length == 0) {
+			return null;
+		}
+		return (d, n) -> {
+			var l = n.toLowerCase();
+			for (String ext : extFilter) {
+				if (l.endsWith(ext)) {
+					return true;
+				}
+			}
+			return new File(d, n).isDirectory();
+		};
 	}
 
 	protected static FileFilter getFileFilter(final String extName, final String[] extFilter) {

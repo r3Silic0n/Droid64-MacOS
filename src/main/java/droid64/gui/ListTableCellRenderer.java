@@ -23,7 +23,8 @@ public class ListTableCellRenderer extends DefaultTableCellRenderer {
 	@Override
 	public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
 		super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-		var label = new JLabel(value != null ? value.toString() : Utility.EMPTY);
+		var text = value != null ? value.toString() : Utility.EMPTY;
+		var label = new JLabel(text);
 		label.setOpaque(true);
 		label.setFont(table.getFont());
 		if (model.getMode() == EntryTableModel.MODE_LOCAL) {
@@ -55,5 +56,4 @@ public class ListTableCellRenderer extends DefaultTableCellRenderer {
 
 		return label;
 	}
-
 }

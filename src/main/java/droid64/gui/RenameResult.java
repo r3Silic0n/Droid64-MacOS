@@ -14,6 +14,16 @@ public class RenameResult {
 	private boolean compressedDisk = false;
 	private boolean cpmDisk = false;
 	private int partitionSectorCount;
+	private FileType batchFileType;
+
+	/** @return file type to set for all selected files, or null for normal rename */
+	public FileType getBatchFileType() {
+		return batchFileType;
+	}
+
+	public void setBatchFileType(FileType batchFileType) {
+		this.batchFileType = batchFileType;
+	}
 
 	public String getFileName() {
 		return fileName;
