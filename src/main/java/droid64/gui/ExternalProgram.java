@@ -166,6 +166,13 @@ public class ExternalProgram {
 
 	private static File findViceIn(File place, String exe) {
 		if (place.isFile()) {
+			if (place.getName().equals("droplet") && place.getParentFile() != null && place.getParentFile().getParentFile() != null
+					&& place.getParentFile().getParentFile().getParentFile() != null) {
+				var real = new File(place.getParentFile().getParentFile().getParentFile(), "Contents/Resources/bin/" + exe);
+				if (real.isFile()) {
+					return real;
+				}
+			}
 			return place;
 		}
 		if (!place.isDirectory()) {
@@ -173,12 +180,18 @@ public class ExternalProgram {
 		}
 		var candidates = new ArrayList<File>();
 		if (place.getName().endsWith(".app")) {
+			// VICE 3.x GTK bundles: Contents/MacOS holds only a "droplet" launcher which drops the command line,
+			// the emulator itself is in Contents/Resources/bin
+			candidates.add(new File(place, "Contents/Resources/bin/" + exe));
 			candidates.add(new File(place, "Contents/MacOS/" + exe));
 		}
+		candidates.add(new File(place, exe + ".app/Contents/Resources/bin/" + exe));
 		candidates.add(new File(place, exe + ".app/Contents/MacOS/" + exe));
 		candidates.add(new File(place, exe));
 		candidates.add(new File(place, "bin/" + exe));
+		candidates.add(new File(place, "VICE.app/Contents/Resources/bin/" + exe));
 		candidates.add(new File(place, "VICE.app/Contents/MacOS/" + exe));
+		candidates.add(new File(place, "VICE/" + exe + ".app/Contents/Resources/bin/" + exe));
 		candidates.add(new File(place, "VICE/" + exe + ".app/Contents/MacOS/" + exe));
 		for (var c : candidates) {
 			if (c.isFile()) {
@@ -187,8 +200,12 @@ public class ExternalProgram {
 		}
 		if (place.getName().endsWith(".app")) {
 			var macos = new File(place, "Contents/MacOS").listFiles();
-			if (macos != null && macos.length > 0) {
-				return macos[0];
+			if (macos != null) {
+				for (var m : macos) {
+					if (!m.getName().equals("droplet")) {
+						return m;
+					}
+				}
 			}
 		}
 		return null;
