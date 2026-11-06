@@ -28,29 +28,21 @@ public class GraphicBamDialog extends JDialog {
 	private final transient DiskImage image;
 	private final JLabel info = new JLabel(" ");
 	private final SectorGrid grid;
-	private final SectorEditorPanel editor;
+	private final transient DiskPanel diskPanel;
+	private final String imageTitle;
+	private SectorEditorPanel editor;
+	private JDialog editorDialog;
 	private final DefaultListModel<ImageCheck.Finding> findingsModel = new DefaultListModel<>();
 	private final JList<ImageCheck.Finding> findingsList = new JList<>(findingsModel);
 	private final JLabel checkSummary = new JLabel("Press \"Check image\" to check the BAM, the files and the disk errors.");
-	private int selTrack;
-	private int selSector;
 
 	public GraphicBamDialog(java.awt.Frame owner, DiskPanel panel, DiskImage image, String title) {
 		super(owner, "BAM / Sector editor - " + title, false);
 		this.image = image;
+		this.diskPanel = panel;
+		this.imageTitle = title;
 		this.grid = new SectorGrid(image);
 		setLayout(new BorderLayout());
-		int firstTrack = image instanceof droid64.d64.D81 ? 40 : Math.min(18, image.getTrackCount());
-		this.editor = new SectorEditorPanel(panel, image, firstTrack, 0);
-		selTrack = firstTrack;
-		selSector = 0;
-		grid.setSelected(firstTrack, 0);
-		editor.setSectorListener((t, s) -> {
-			selTrack = t;
-			selSector = s;
-			grid.setSelected(t, s);
-			updateInfo(-1, -1);
-		});
 		grid.setClickListener((t, s) -> select(t, s));
 		grid.setHoverListener(this::updateInfo);
 
@@ -82,9 +74,7 @@ public class GraphicBamDialog extends JDialog {
 		var left = new JSplitPane(JSplitPane.VERTICAL_SPLIT, gridScroll, findings);
 		left.setResizeWeight(1);
 		left.setBorder(null);
-		var split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, editor);
-		split.setResizeWeight(0);
-		add(split, BorderLayout.CENTER);
+		add(left, BorderLayout.CENTER);
 		setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
 		addWindowListener(new java.awt.event.WindowAdapter() {
 			@Override
@@ -110,15 +100,53 @@ public class GraphicBamDialog extends JDialog {
 		bottom.add(buttons, BorderLayout.EAST);
 		add(bottom, BorderLayout.SOUTH);
 		updateInfo(-1, -1);
-		int w = Math.min(grid.getPreferredSize().width + 20, 700) + editor.getPreferredSize().width + 30;
-		int h = Math.max(Math.min(grid.getPreferredSize().height + 260, 800), editor.getPreferredSize().height + 110);
-		setSize(w, h);
+		setSize(Math.min(grid.getPreferredSize().width + 30, 760), Math.min(grid.getPreferredSize().height + 250, 700));
 		setLocationRelativeTo(owner);
 	}
 
+	/** The sector editor has its own window, which opens when a sector is clicked and is reused for the next one. */
 	private void select(int t, int s) {
-		editor.gotoSector(t, s);
+		if (editor == null) {
+			editor = new SectorEditorPanel(diskPanel, image, t, s);
+			editor.setSectorListener((tr, se) -> grid.setSelected(tr, se));
+			editorDialog = new JDialog(this, "Sector editor - " + imageTitle, false);
+			editorDialog.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+			editorDialog.addWindowListener(new java.awt.event.WindowAdapter() {
+				@Override
+				public void windowClosing(java.awt.event.WindowEvent e) {
+					closeEditor();
+				}
+			});
+			editorDialog.add(editor);
+			editorDialog.setSize(editor.getPreferredSize().width + 30, editor.getPreferredSize().height + 80);
+			var main = getBounds();
+			var screen = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+			int x = main.x + main.width + 8;
+			if (x + editorDialog.getWidth() > screen.width) {
+				x = Math.max(0, screen.width - editorDialog.getWidth());
+			}
+			editorDialog.setLocation(x, main.y);
+		} else {
+			editor.gotoSector(t, s);
+		}
+		grid.setSelected(t, s);
+		editorDialog.setVisible(true);
+		editorDialog.toFront();
 		editor.focusEditor();
+	}
+
+	private boolean closeEditor() {
+		if (editor == null) {
+			return true;
+		}
+		if (!editor.confirmLeave()) {
+			return false;
+		}
+		editorDialog.dispose();
+		editorDialog = null;
+		editor = null;
+		grid.setSelected(-1, -1);
+		return true;
 	}
 
 	private void runCheck() {
@@ -138,7 +166,7 @@ public class GraphicBamDialog extends JDialog {
 	}
 
 	private void closeIfAllowed() {
-		if (editor.confirmLeave()) {
+		if (closeEditor()) {
 			dispose();
 		}
 	}
@@ -155,7 +183,7 @@ public class GraphicBamDialog extends JDialog {
 				}
 			}
 		}
-		var text = "Free: " + free + "   Used: " + used + "   (click a sector to edit it on the right)";
+		var text = "Free: " + free + "   Used: " + used + "   (click a sector to edit it)";
 		if (t > 0) {
 			text = "Track " + t + ", sector " + s + ": " + (image.isSectorFree(t, s) ? "free" : "used")
 					+ (image.getSectorError(t, s) != 0 ? ", " + ImageCheck.errorText(image.getSectorError(t, s)) : "")
