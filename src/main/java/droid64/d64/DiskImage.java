@@ -907,6 +907,48 @@ public abstract class DiskImage implements Serializable {
 		System.arraycopy(data, 0, cbmDisk, getSectorOffset(track, sector), BLOCK_SIZE);
 	}
 
+	/** @return true if the image file has the optional error info bytes (one per block) after the block data */
+	public boolean hasErrorInfo() {
+		if (cbmDisk == null) {
+			return false;
+		}
+		int blocks = 0;
+		for (int t = 1; t <= getTrackCount(); t++) {
+			blocks += getMaxSectors(t);
+		}
+		return blocks > 0 && cbmDisk.length == blocks * (BLOCK_SIZE + 1);
+	}
+
+	/**
+	 * The DOS error number stored in the error info of the image (D64 style).
+	 * @return 0 if the sector is fine or the image has no error info, else 20..29
+	 */
+	public int getSectorError(int track, int sector) {
+		if (!hasErrorInfo() || track < 1 || track > getTrackCount() || sector < 0 || sector >= getMaxSectors(track)) {
+			return 0;
+		}
+		int blocks = 0;
+		for (int t = 1; t <= getTrackCount(); t++) {
+			blocks += getMaxSectors(t);
+		}
+		int index = getSectorOffset(track, sector) / BLOCK_SIZE;
+		int b = cbmDisk[blocks * BLOCK_SIZE + index] & 0xff;
+		switch (b) {
+		case 2: case 3: case 4: case 5:
+			return b + 18;
+		case 7:
+			return 25;
+		case 8:
+			return 26;
+		case 9:
+			return 27;
+		case 11:
+			return 29;
+		default:
+			return 0;
+		}
+	}
+
 	public void verifyTrackSector(int track, int sector) throws CbmException {
 		if (track < 1 || track > getTrackCount()) {
 			throw new CbmException("Track "+track+" is not valid.");
