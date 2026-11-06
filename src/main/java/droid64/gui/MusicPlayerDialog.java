@@ -114,7 +114,8 @@ public class MusicPlayerDialog extends JDialog {
 	private static File lastHvscDir;
 	private boolean sourceChanging;
 	private final JButton scanButton = new JButton("Scan PRG files");
-	private final Meter meter = new Meter();
+	private final Meter meter = new Meter(false);
+	private final Meter miniMeter = new Meter(true);
 	private static MusicPlayerDialog instance;
 
 	/** @return the open player window, or null */
@@ -124,8 +125,154 @@ public class MusicPlayerDialog extends JDialog {
 
 	/** Bring the window to the front. */
 	public void bringToFront() {
+		if (mini != null && mini.isVisible()) {
+			mini.toFront();
+			return;
+		}
 		toFront();
 		requestFocus();
+	}
+
+	// ---- mini player ----
+
+	private JDialog mini;
+	private final JLabel miniTitle = new JLabel(" ");
+	private final JLabel miniAuthor = new JLabel(" ");
+	private final JLabel miniTime = new JLabel("0:00");
+	private final JSlider miniSeek = new JSlider(0, 300, 0);
+	private final JButton miniPlay = new JButton(TransportIcon.PLAY);
+	private final JButton miniPrev = new JButton(TransportIcon.PREVIOUS);
+	private final JButton miniNext = new JButton(TransportIcon.NEXT);
+	private final JLabel miniSong = new JLabel(" ");
+	private boolean miniSeekAdjusting;
+	private static java.awt.Point miniLocation;
+
+	private void buildMini() {
+		mini = new JDialog(getOwner(), "Mini player", ModalityType.MODELESS);
+		mini.setAlwaysOnTop(true);
+		mini.setResizable(false);
+		mini.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+		mini.addWindowListener(new java.awt.event.WindowAdapter() {
+			@Override
+			public void windowClosing(java.awt.event.WindowEvent e) {
+				hideMini();
+			}
+		});
+		miniTitle.setFont(miniTitle.getFont().deriveFont(Font.BOLD, 14f));
+		miniAuthor.setFont(miniAuthor.getFont().deriveFont(12f));
+		var expand = new JButton("Full player");
+		expand.setToolTipText("Back to the full player window");
+		expand.addActionListener(e -> hideMini());
+		expand.setFocusable(false);
+		for (var b : new JButton[] { miniPlay, miniPrev, miniNext }) {
+			b.setFocusable(false);
+		}
+		miniPlay.addActionListener(e -> playPause());
+		miniPrev.addActionListener(e -> changeSong(-1));
+		miniNext.addActionListener(e -> changeSong(1));
+		miniPrev.setToolTipText("Previous tune");
+		miniNext.setToolTipText("Next tune");
+		miniSeek.setEnabled(false);
+		miniSeek.addMouseListener(new java.awt.event.MouseAdapter() {
+			@Override
+			public void mousePressed(java.awt.event.MouseEvent e) {
+				miniSeekAdjusting = true;
+				if (miniSeek.getUI() instanceof javax.swing.plaf.basic.BasicSliderUI) {
+					miniSeek.setValue(((javax.swing.plaf.basic.BasicSliderUI) miniSeek.getUI()).valueForXPosition(e.getX()));
+				}
+			}
+
+			@Override
+			public void mouseReleased(java.awt.event.MouseEvent e) {
+				miniSeekAdjusting = false;
+				var p = player;
+				if (p != null) {
+					p.seekTo = (long) miniSeek.getValue() * RATE;
+				}
+			}
+		});
+		var miniVolume = new JSlider(0, 100, volume.getValue());
+		miniVolume.setPreferredSize(new Dimension(90, 22));
+		miniVolume.addChangeListener(e -> volume.setValue(miniVolume.getValue()));
+		volume.addChangeListener(e -> miniVolume.setValue(volume.getValue()));
+
+		var texts = new JPanel(new GridBagLayout());
+		var g = new GridBagConstraints();
+		g.gridx = 0;
+		g.weightx = 1;
+		g.anchor = GridBagConstraints.WEST;
+		g.fill = GridBagConstraints.HORIZONTAL;
+		texts.add(miniTitle, g);
+		texts.add(miniAuthor, g);
+		var buttons = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 0));
+		buttons.add(miniPrev);
+		buttons.add(miniSong);
+		buttons.add(miniPlay);
+		buttons.add(miniNext);
+		buttons.add(miniVolume);
+		var time = new JPanel(new BorderLayout(6, 0));
+		time.add(miniSeek, BorderLayout.CENTER);
+		time.add(miniTime, BorderLayout.EAST);
+		var south = new JPanel(new BorderLayout(0, 2));
+		south.add(time, BorderLayout.NORTH);
+		south.add(buttons, BorderLayout.CENTER);
+		var top = new JPanel(new BorderLayout(8, 0));
+		top.add(texts, BorderLayout.CENTER);
+		top.add(expand, BorderLayout.EAST);
+		var content = new JPanel(new BorderLayout(0, 6));
+		content.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+		content.add(top, BorderLayout.NORTH);
+		content.add(south, BorderLayout.CENTER);
+		miniMeter.setPreferredSize(new Dimension(86, 86));
+		var wrap = new JPanel(new BorderLayout(8, 0));
+		wrap.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+		content.setBorder(null);
+		wrap.add(miniMeter, BorderLayout.WEST);
+		wrap.add(content, BorderLayout.CENTER);
+		mini.setContentPane(wrap);
+		mini.setSize(480, 140);
+	}
+
+	private void showMini() {
+		if (mini == null) {
+			buildMini();
+		}
+		updateMini();
+		if (miniLocation != null) {
+			mini.setLocation(miniLocation);
+		} else {
+			mini.setLocationRelativeTo(this);
+		}
+		setVisible(false);
+		mini.setVisible(true);
+	}
+
+	private void hideMini() {
+		if (mini != null) {
+			miniLocation = mini.getLocation();
+			mini.setVisible(false);
+		}
+		setVisible(true);
+		toFront();
+	}
+
+	private void updateMini() {
+		if (mini == null || !mini.isVisible()) {
+			return;
+		}
+		miniTitle.setText(infoTitle.getText());
+		miniAuthor.setText(infoAuthor.getText());
+		miniTime.setText(timeLabel.getText());
+		miniSong.setText(songLabel.getText());
+		miniPlay.setIcon(playButton.getIcon());
+		miniPlay.setEnabled(playButton.isEnabled());
+		miniPrev.setEnabled(prevSong.isEnabled());
+		miniNext.setEnabled(nextSong.isEnabled());
+		miniSeek.setEnabled(seek.isEnabled());
+		if (!miniSeekAdjusting) {
+			miniSeek.setMaximum(seek.getMaximum());
+			miniSeek.setValue(seek.getValue());
+		}
 	}
 
 	private Item current;
@@ -153,6 +300,9 @@ public class MusicPlayerDialog extends JDialog {
 				}
 				stop();
 				ticker.stop();
+				if (mini != null) {
+					mini.dispose();
+				}
 			}
 		});
 		ticker = new Timer(50, e -> tick());
@@ -335,6 +485,10 @@ public class MusicPlayerDialog extends JDialog {
 		var bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
 		saveButton.addActionListener(e -> saveAsSid());
 		bottom.add(saveButton);
+		var miniButton = new JButton("Mini player");
+		miniButton.setToolTipText("Small always-on-top player window, so music can play while you work in DroiD64");
+		miniButton.addActionListener(e -> showMini());
+		bottom.add(miniButton);
 		var close = new JButton("Close");
 		close.addActionListener(e -> dispose());
 		bottom.add(close);
@@ -834,6 +988,7 @@ public class MusicPlayerDialog extends JDialog {
 		seek.setMaximum(300);
 		seek.setEnabled(false);
 		meter.reset();
+		miniMeter.reset();
 	}
 
 	/** The known length of the tune is over: next tune of the file, else next music file, else stop. */
@@ -872,6 +1027,7 @@ public class MusicPlayerDialog extends JDialog {
 	}
 
 	private void tick() {
+		updateMini();
 		var p = player;
 		if (p == null) {
 			return;
@@ -903,6 +1059,9 @@ public class MusicPlayerDialog extends JDialog {
 		}
 		status.setText(p.seekTo >= 0 ? "Seeking..." : p.paused ? "Paused" : "Playing" + (p.engine.isAlive() ? "" : " (play routine did not return)"));
 		meter.update(p.engine);
+		if (mini != null && mini.isVisible()) {
+			miniMeter.update(p.engine);
+		}
 	}
 
 	/** Audio thread. */
@@ -1079,7 +1238,11 @@ public class MusicPlayerDialog extends JDialog {
 		private final javax.swing.Timer animation = new javax.swing.Timer(16, e -> animate());
 		private long lastNanos;
 
-		Meter() {
+		private boolean compact;
+
+		/** @param compact small square variant for the mini player: three bars above a waveform */
+		Meter(boolean compact) {
+			this.compact = compact;
 			setBackground(Color.BLACK);
 			setDoubleBuffered(true);
 		}
@@ -1166,6 +1329,32 @@ public class MusicPlayerDialog extends JDialog {
 			return path;
 		}
 
+		private void paintCompact(java.awt.Graphics2D g, int w, int h) {
+			int barsH = h * 11 / 20;
+			int gap = 4;
+			int barW = (w - 8 - 2 * gap) / 3;
+			for (int i = 0; i < 3; i++) {
+				int x = 4 + i * (barW + gap);
+				double bh = level[i] * (barsH - 4);
+				g.setColor(new Color(40, 40, 40));
+				g.fillRect(x, 4, barW, barsH - 4);
+				g.setPaint(new java.awt.GradientPaint(0, 4, new Color(150, 240, 90), 0, barsH, new Color(40, 170, 70)));
+				g.fill(new java.awt.geom.Rectangle2D.Double(x, barsH - bh, barW, bh));
+				g.setColor(new Color(220, 255, 180));
+				int py = (int) Math.round(barsH - peak[i] * (barsH - 4));
+				g.fillRect(x, Math.min(py, barsH - 2), barW, 2);
+			}
+			if (live) {
+				int top = barsH + 2;
+				int th = h - top - 2;
+				g.translate(0, top);
+				g.setStroke(new java.awt.BasicStroke(1.3f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+				g.setColor(new Color(120, 255, 120));
+				g.draw(tracePath(shown, 4, w - 8, th + 8));
+				g.translate(0, -top);
+			}
+		}
+
 		@Override
 		protected void paintComponent(Graphics g0) {
 			super.paintComponent(g0);
@@ -1174,6 +1363,11 @@ public class MusicPlayerDialog extends JDialog {
 			g.setRenderingHint(java.awt.RenderingHints.KEY_STROKE_CONTROL, java.awt.RenderingHints.VALUE_STROKE_PURE);
 			int w = getWidth();
 			int h = getHeight();
+			if (compact) {
+				paintCompact(g, w, h);
+				g.dispose();
+				return;
+			}
 			int barW = 38;
 			int barH = h - 24;
 			for (int i = 0; i < 3; i++) {
