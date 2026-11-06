@@ -45,6 +45,11 @@ public final class FtpDialog extends JDialog {
 	private final JTextField user = new JTextField(10);
 	private final JPasswordField password = new JPasswordField(10);
 	private final JButton connectButton = new JButton("Connect");
+	private final JTextField localFolder = new JTextField(30);
+	private final javax.swing.JComboBox<String> sitesBox = new javax.swing.JComboBox<>();
+	private final transient List<String[]> sites = new ArrayList<>();	// name, host, port, user, remote dir
+	private boolean fillingSites;
+	private String startRemoteDir = "";
 	private final JLabel pathLabel = new JLabel(" ");
 	private final JTextArea log = new JTextArea(5, 60);
 	private final JProgressBar bar = new JProgressBar(0, 1000);
@@ -93,6 +98,33 @@ public final class FtpDialog extends JDialog {
 		top.add(new JLabel("Password"), c);
 		top.add(password, c);
 		top.add(connectButton, c);
+
+		localFolder.setText(Setting.FTP_LOCAL_DIR.getString());
+		var browse = new JButton("Browse...");
+		browse.addActionListener(e -> {
+			var f = FolderChooserDialog.choose(this, "Folder for downloads", new File(localFolder.getText().trim()));
+			if (f != null) {
+				localFolder.setText(f.getPath());
+				Setting.FTP_LOCAL_DIR.set(f.getPath());
+			}
+		});
+		var saveSite = new JButton("Save site...");
+		saveSite.addActionListener(e -> saveSite());
+		var deleteSite = new JButton("Delete site");
+		deleteSite.addActionListener(e -> deleteSite());
+		var row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+		row2.add(new JLabel("Sites"));
+		row2.add(sitesBox);
+		row2.add(saveSite);
+		row2.add(deleteSite);
+		row2.add(new JLabel("   Local folder"));
+		row2.add(localFolder);
+		row2.add(browse);
+		sitesBox.addActionListener(e -> siteSelected());
+		loadSites();
+		var north = new JPanel(new BorderLayout());
+		north.add(top, BorderLayout.NORTH);
+		north.add(row2, BorderLayout.SOUTH);
 
 		table = new JTable(new AbstractTableModel() {
 			private static final long serialVersionUID = 1L;
@@ -177,7 +209,7 @@ public final class FtpDialog extends JDialog {
 
 		var content = new JPanel(new BorderLayout(4, 4));
 		content.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
-		content.add(top, BorderLayout.NORTH);
+		content.add(north, BorderLayout.NORTH);
 		content.add(center, BorderLayout.CENTER);
 		setContentPane(content);
 		setPreferredSize(new Dimension(860, 600));
@@ -274,6 +306,13 @@ public final class FtpDialog extends JDialog {
 				cl.connect(h, fp);
 				say(cl.getLastReply());
 				cl.login(fu, pw.isEmpty() && fu.equals("anonymous") ? "droid64@localhost" : pw);
+				if (!startRemoteDir.isEmpty()) {
+					try {
+						cl.cwd(startRemoteDir);
+					} catch (IOException e) {
+						say("Folder " + startRemoteDir + " not found: " + e.getMessage());
+					}
+				}
 				remotePath = cl.pwd();
 				var list = cl.list();
 				SwingUtilities.invokeLater(() -> {
@@ -348,18 +387,118 @@ public final class FtpDialog extends JDialog {
 	}
 
 	private File localDir() {
-		var dir = Setting.FTP_LOCAL_DIR.getString();
-		if (dir != null && !dir.isEmpty() && new File(dir).isDirectory()) {
-			return new File(dir);
+		var dir = new File(localFolder.getText().trim());
+		if (!localFolder.getText().trim().isEmpty() && dir.isDirectory()) {
+			Setting.FTP_LOCAL_DIR.set(dir.getPath());
+			return dir;
 		}
-		var ch = new JFileChooser();
-		ch.setDialogTitle("Folder for downloads");
-		ch.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-		if (ch.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-			Setting.FTP_LOCAL_DIR.set(ch.getSelectedFile().getPath());
-			return ch.getSelectedFile();
+		var f = FolderChooserDialog.choose(this, "Folder for downloads", dir);
+		if (f != null) {
+			localFolder.setText(f.getPath());
+			Setting.FTP_LOCAL_DIR.set(f.getPath());
 		}
-		return null;
+		return f;
+	}
+
+	// ---- saved sites ----
+
+	private static String clean(String v) {
+		return v == null ? "" : v.replace("|", "_").replace("~", "_").trim();
+	}
+
+	private void loadSites() {
+		sites.clear();
+		var all = Setting.FTP_SITES.getString();
+		if (all != null && !all.isEmpty()) {
+			for (var rec : all.split("~~")) {
+				var f = rec.split("\\|", -1);
+				if (f.length >= 5 && !f[0].isEmpty()) {
+					sites.add(new String[] { f[0], f[1], f[2], f[3], f[4], f.length > 5 ? f[5] : "" });
+				}
+			}
+		}
+		refillSites(null);
+	}
+
+	private void refillSites(String select) {
+		fillingSites = true;
+		sitesBox.removeAllItems();
+		sitesBox.addItem("(saved sites)");
+		for (var s : sites) {
+			sitesBox.addItem(s[0]);
+		}
+		if (select != null) {
+			sitesBox.setSelectedItem(select);
+		}
+		fillingSites = false;
+	}
+
+	private void storeSites() {
+		var sb = new StringBuilder();
+		for (var s : sites) {
+			if (sb.length() > 0) {
+				sb.append("~~");
+			}
+			sb.append(String.join("|", s));
+		}
+		Setting.FTP_SITES.set(sb.toString());
+		try {
+			mainPanel.saveSettingsQuietly();
+		} catch (RuntimeException e) {	//NOSONAR
+			say("Could not save the settings: " + e.getMessage());
+		}
+	}
+
+	private void siteSelected() {
+		int i = sitesBox.getSelectedIndex() - 1;
+		if (fillingSites || i < 0 || i >= sites.size()) {
+			return;
+		}
+		var s = sites.get(i);
+		host.setText(s[1]);
+		port.setText(s[2]);
+		user.setText(s[3]);
+		startRemoteDir = s[4];
+		if (!s[5].isEmpty()) {
+			localFolder.setText(s[5]);
+		}
+		password.setText("");
+		say("Site \"" + s[0] + "\" selected. Press Connect (the password is not saved).");
+	}
+
+	private void saveSite() {
+		var def = sitesBox.getSelectedIndex() > 0 ? (String) sitesBox.getSelectedItem() : host.getText().trim();
+		var name = clean(JOptionPane.showInputDialog(this, "Name of the site:", def));
+		if (name.isEmpty()) {
+			return;
+		}
+		var rec = new String[] { name, clean(host.getText()), clean(port.getText().isEmpty() ? "21" : port.getText()),
+				clean(user.getText()), clean(client != null ? remotePath : startRemoteDir), clean(localFolder.getText()) };
+		boolean replaced = false;
+		for (int i = 0; i < sites.size(); i++) {
+			if (sites.get(i)[0].equalsIgnoreCase(name)) {
+				sites.set(i, rec);
+				replaced = true;
+			}
+		}
+		if (!replaced) {
+			sites.add(rec);
+		}
+		storeSites();
+		refillSites(name);
+		say("Site \"" + name + "\" saved.");
+	}
+
+	private void deleteSite() {
+		int i = sitesBox.getSelectedIndex() - 1;
+		if (i < 0 || i >= sites.size()) {
+			return;
+		}
+		if (JOptionPane.showConfirmDialog(this, "Delete the site \"" + sites.get(i)[0] + "\"?", "FTP", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+			sites.remove(i);
+			storeSites();
+			refillSites(null);
+		}
 	}
 
 	private void download(boolean open) {
@@ -428,7 +567,7 @@ public final class FtpDialog extends JDialog {
 	}
 
 	private void upload() {
-		var ch = new JFileChooser(Setting.FTP_LOCAL_DIR.getString().isEmpty() ? null : new File(Setting.FTP_LOCAL_DIR.getString()));
+		var ch = new JFileChooser(localFolder.getText().trim().isEmpty() ? null : new File(localFolder.getText().trim()));
 		ch.setMultiSelectionEnabled(true);
 		ch.setDialogTitle("Files to upload");
 		if (ch.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {

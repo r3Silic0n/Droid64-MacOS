@@ -63,6 +63,7 @@ public enum Setting {
 	FTP_HOST("ftp_host",                         ParameterType.STRING,           Utility.EMPTY),
 	FTP_PORT("ftp_port",                         ParameterType.STRING,           "21"),
 	FTP_USER("ftp_user",                         ParameterType.STRING,           "anonymous"),
+	FTP_SITES("ftp_sites",                       ParameterType.STRING,           Utility.EMPTY),
 	FTP_LOCAL_DIR("ftp_local_dir",               ParameterType.STRING,           Utility.EMPTY),
 	UPDATE_AUTO("update_auto",                   ParameterType.BOOLEAN,          Boolean.TRUE),
 	UPDATE_LAST("update_last",                   ParameterType.INTEGER,          Integer.valueOf(0)),
