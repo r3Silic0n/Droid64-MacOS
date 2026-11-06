@@ -89,6 +89,25 @@ public class DirArtEditorDialog extends JDialog {
 		top.add(rowCount);
 		top.add(new JLabel("Disk ID"));
 		top.add(idField);
+		// start with the real disk name and ID, so that changing only one of them keeps the other
+		if (image != null && DirArtWriter.isSupported(image)) {
+			try {
+				var name = DirArtWriter.readDiskName(image);
+				for (int i = 0; i < name.length && i < header.length; i++) {
+					header[i] = (name[i] & 0xff) == 0xa0 ? (byte) 0x20 : name[i];
+				}
+				idField.setText(idText(DirArtWriter.readDiskId(image)));
+			} catch (CbmException e) {
+				// keep the empty header
+			}
+		}
+		GuiHelper.installPetsciiCase(idField, () -> true);
+		idField.addKeyListener(new java.awt.event.KeyAdapter() {
+			@Override
+			public void keyTyped(KeyEvent e) {
+				writeHeader.setSelected(true);
+			}
+		});
 		var importBtn = new JButton("Read from disk");
 		var clearBtn = new JButton("Clear all");
 		var fillBtn = new JButton("Fill line");
@@ -210,6 +229,7 @@ public class DirArtEditorDialog extends JDialog {
 	private void setCell(int row, int col, int value) {
 		if (row == 0) {
 			header[col] = (byte) value;
+			writeHeader.setSelected(true);
 		} else {
 			rows.get(row - 1).raw[3 + col] = (byte) value;
 		}
@@ -241,7 +261,7 @@ public class DirArtEditorDialog extends JDialog {
 	static byte[] idBytes(String text) {
 		var b = new byte[DirArtWriter.ID_LENGTH];
 		for (int i = 0; i < b.length; i++) {
-			char c = i < text.length() ? Character.toUpperCase(text.charAt(i)) : ' ';
+			char c = i < text.length() ? text.charAt(i) : ' ';
 			b[i] = c == ' ' ? (byte) 0xa0 : (byte) c;
 		}
 		return b;
@@ -321,11 +341,17 @@ public class DirArtEditorDialog extends JDialog {
 		}
 		var mode = (DirArtWriter.Mode) modeBox.getSelectedItem();
 		var toWrite = DirArtWriter.rowsToWrite(rows);
-		if (toWrite.isEmpty()) {
-			JOptionPane.showMessageDialog(this, "Nothing was changed, so there is nothing to write.", "DIR art", JOptionPane.INFORMATION_MESSAGE);
+		boolean headerOnly = toWrite.isEmpty() && writeHeader.isSelected();
+		if (toWrite.isEmpty() && !headerOnly) {
+			JOptionPane.showMessageDialog(this, "Nothing was changed, so there is nothing to write.\n"
+					+ "To write only the disk name and ID, tick \"Also write disk name and ID\".", "DIR art", JOptionPane.INFORMATION_MESSAGE);
 			return;
 		}
-		var warning = mode == DirArtWriter.Mode.UPDATE
+		if (headerOnly) {
+			// only the disk name and ID: the directory entries are kept as they are
+			mode = DirArtWriter.Mode.UPDATE;
+		}
+		var warning = headerOnly ? "The disk name and ID of this disk image will be changed (the directory entries are kept)." : mode == DirArtWriter.Mode.UPDATE
 				? toWrite.size() + " entries will be updated in the directory of this disk image (the other entries are kept)."
 				: mode == DirArtWriter.Mode.REPLACE
 				? "The whole directory of this disk image will be replaced by these " + toWrite.size() + " entries.\n"
@@ -340,6 +366,10 @@ public class DirArtEditorDialog extends JDialog {
 			byte[] diskId = null;
 			if (writeHeader.isSelected()) {
 				diskName = header.clone();
+				// trailing spaces are stored as shifted spaces ($A0), like the DOS does
+				for (int i = diskName.length - 1; i >= 0 && diskName[i] == 0x20; i--) {
+					diskName[i] = (byte) 0xa0;
+				}
 				diskId = idBytes(idField.getText());
 			}
 			DirArtWriter.write(image, toWrite, mode, diskName, diskId);
@@ -493,6 +523,10 @@ public class DirArtEditorDialog extends JDialog {
 					return;
 				}
 				int p = C64.asciiToPetscii(c);
+				if (Character.isLetter(c) && p >= 0 && charsetBox.getSelectedIndex() == 1 && !e.isShiftDown()) {
+					// lower case / upper case character set: a letter without Shift is the capital letter
+					p += 0x80;
+				}
 				if (p >= 0) {
 					setCell(curRow, curCol, p);
 					if (curCol < DirArtWriter.NAME_LENGTH - 1) {
@@ -524,7 +558,7 @@ public class DirArtEditorDialog extends JDialog {
 			for (int c = 0; c < DirArtWriter.NAME_LENGTH; c++) {
 				C64.drawPetscii(g, header[c] & 0xff, (ART_COL + c) * CELL, 0, CELL, CELL, bg, fg, drawMachine, drawLower);
 			}
-			drawText(g, "\" " + String.format("%-5s", idField.getText().toUpperCase()), ART_COL + DirArtWriter.NAME_LENGTH, 0, fg, headBg);
+			drawText(g, "\" " + String.format("%-5s", idField.getText()), ART_COL + DirArtWriter.NAME_LENGTH, 0, fg, headBg);
 			g.translate(0, GAP);
 			for (int r = 0; r < rows.size(); r++) {
 				var row = rows.get(r);
