@@ -1068,79 +1068,125 @@ public class MusicPlayerDialog extends JDialog {
 
 	private static final class Meter extends JPanel {
 		private static final long serialVersionUID = 1L;
-		private final double[] level = new double[3];
+		private final double[] level = new double[3];	// smoothed levels which are drawn
+		private final double[] peak = new double[3];
 		private final short[] scope = new short[1024];
 		private int chips = 1;
 		private boolean live;
+		private transient SidEngine engine;
+		private final javax.swing.Timer animation = new javax.swing.Timer(16, e -> animate());
+		private long lastNanos;
 
 		Meter() {
 			setBackground(Color.BLACK);
+			setDoubleBuffered(true);
 		}
 
 		void reset() {
 			live = false;
+			engine = null;
+			animation.stop();
 			java.util.Arrays.fill(level, 0);
+			java.util.Arrays.fill(peak, 0);
 			java.util.Arrays.fill(scope, (short) 0);
 			repaint();
 		}
 
+		/** Called from the player timer: remember the engine; the meter polls it at about 60 frames per second itself. */
 		void update(SidEngine e) {
 			live = true;
-			for (int i = 0; i < 3; i++) {
-				level[i] = e.getChip(0).getVoiceLevel(i);
+			engine = e;
+			if (!animation.isRunning()) {
+				lastNanos = System.nanoTime();
+				animation.start();
 			}
-			System.arraycopy(e.getScope(), 0, scope, 0, 1024);
+		}
+
+		private void animate() {
+			var e = engine;
+			if (e == null) {
+				return;
+			}
+			long now = System.nanoTime();
+			double dt = Math.min(0.1, (now - lastNanos) / 1e9);
+			lastNanos = now;
+			for (int i = 0; i < 3; i++) {
+				double target = Math.max(0, Math.min(1, e.getChip(0).getVoiceLevel(i)));
+				if (target > level[i]) {
+					level[i] += (target - level[i]) * (1 - Math.exp(-dt / 0.012));	// quick attack
+				} else {
+					level[i] += (target - level[i]) * (1 - Math.exp(-dt / 0.090));	// smooth fall
+				}
+				if (level[i] >= peak[i]) {
+					peak[i] = level[i];
+				} else {
+					peak[i] = Math.max(level[i], peak[i] - dt * 0.6);	// peak marker falls slowly
+				}
+			}
 			int pos = e.getScopePos() & 1023;
-			// rotate so that the newest sample is at the end
-			var tmp = scope.clone();
+			var src = e.getScope();
+			// newest sample at the end
 			for (int i = 0; i < 1024; i++) {
-				scope[i] = tmp[(pos + i) & 1023];
+				scope[i] = src[(pos + i) & 1023];
 			}
 			chips = e.getChipCount();
 			repaint();
 		}
 
 		@Override
-		protected void paintComponent(Graphics g) {
-			super.paintComponent(g);
+		protected void paintComponent(Graphics g0) {
+			super.paintComponent(g0);
+			var g = (java.awt.Graphics2D) g0.create();
+			g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+			g.setRenderingHint(java.awt.RenderingHints.KEY_STROKE_CONTROL, java.awt.RenderingHints.VALUE_STROKE_PURE);
 			int w = getWidth();
 			int h = getHeight();
 			int barW = 38;
+			int barH = h - 24;
 			for (int i = 0; i < 3; i++) {
-				int bh = (int) (level[i] * (h - 24));
+				int x = 8 + i * (barW + 6);
+				double bh = level[i] * barH;
 				g.setColor(new Color(40, 40, 40));
-				g.fillRect(8 + i * (barW + 6), 6, barW, h - 24);
-				g.setColor(new Color(80, 220, 80));
-				g.fillRect(8 + i * (barW + 6), 6 + (h - 24) - bh, barW, bh);
+				g.fillRect(x, 6, barW, barH);
+				g.setPaint(new java.awt.GradientPaint(0, 6, new Color(150, 240, 90), 0, 6 + barH, new Color(40, 170, 70)));
+				g.fill(new java.awt.geom.Rectangle2D.Double(x, 6 + barH - bh, barW, bh));
+				g.setColor(new Color(220, 255, 180));
+				int py = (int) Math.round(6 + barH - peak[i] * barH);
+				g.fillRect(x, Math.min(py, 6 + barH - 2), barW, 2);
 				g.setColor(Color.LIGHT_GRAY);
-				g.drawString("V" + (i + 1), 8 + i * (barW + 6) + 12, h - 6);
+				g.drawString("V" + (i + 1), x + 12, h - 6);
 			}
 			int x0 = 8 + 3 * (barW + 6) + 10;
 			int sw = w - x0 - 8;
 			if (sw < 20) {
+				g.dispose();
 				return;
 			}
 			g.setColor(new Color(30, 60, 30));
 			g.drawLine(x0, h / 2, x0 + sw, h / 2);
-			if (!live) {
-				return;
-			}
-			g.setColor(new Color(120, 255, 120));
-			int prevX = x0;
-			int prevY = h / 2;
-			for (int x = 0; x < sw; x++) {
-				int idx = x * 1024 / sw;
-				int y = h / 2 - scope[idx] * (h / 2 - 8) / 32768;
-				if (x > 0) {
-					g.drawLine(prevX, prevY, x0 + x, y);
+			if (live) {
+				g.setColor(new Color(120, 255, 120));
+				g.setStroke(new java.awt.BasicStroke(1.4f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+				var path = new java.awt.geom.Path2D.Float();
+				for (int x = 0; x < sw; x++) {
+					double pos = x * 1023.0 / Math.max(1, sw - 1);
+					int i0 = (int) pos;
+					int i1 = Math.min(1023, i0 + 1);
+					double v = scope[i0] + (scope[i1] - scope[i0]) * (pos - i0);
+					float y = (float) (h / 2.0 - v * (h / 2.0 - 8) / 32768.0);
+					if (x == 0) {
+						path.moveTo(x0, y);
+					} else {
+						path.lineTo(x0 + x, y);
+					}
 				}
-				prevX = x0 + x;
-				prevY = y;
+				g.draw(path);
+				if (chips > 1) {
+					g.setColor(Color.GRAY);
+					g.drawString(chips + " SIDs (meters: first chip)", x0 + 4, 14);
+				}
 			}
-			if (chips > 1) {
-				g.setColor(Color.GRAY);
-				g.drawString(chips + " SIDs (meters: first chip)", x0 + 4, 14);
-			}
+			g.dispose();
 		}
 	}
 }
