@@ -34,7 +34,7 @@ public enum ActionButton {
 	HEX_EDIT_BUTTON(        27, Resources.DROID64_BUTTON_HEXEDIT,      'H', false),
 	DELETE_FILE_BUTTON(     28, Resources.DROID64_BUTTON_DELETE,        'd', false),
 	PLUGIN_8_BUTTON(        29, "",                                     '8', true),
-	VIEW_BASIC_BUTTON(      30, Resources.DROID64_BUTTON_VIEWBASIC,     'B', false),
+	DIR_TXT_BUTTON(         30, Resources.DROID64_BUTTON_DIRTXT,        'D', false),
 	PLUGIN_4_BUTTON(        31, "",                                     '4', true),
 	EXIT_BUTTON(            32, Resources.DROID64_BUTTON_EXIT,          'x', false);
 

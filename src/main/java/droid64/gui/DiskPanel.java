@@ -257,8 +257,8 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 		var popMenu = new JPopupMenu();
 		GuiHelper.addMenuItem(popMenu, Resources.DROID64_MENU_DISK_MD5, '5', event -> calcMd5Checksum());
-		GuiHelper.addMenuItem(popMenu, Resources.DROID64_MENU_DISK_VIEWBASIC, 'b', event -> basicViewFile());
 		GuiHelper.addMenuItem(popMenu, Resources.DROID64_MENU_DISK_VIEWHEX, 'h', event -> hexViewFile());
+		GuiHelper.addMenuItem(popMenu, Resources.DROID64_MENU_DISK_VIEWBASIC, 'b', event -> basicViewFile());
 		GuiHelper.addMenuItem(popMenu, Resources.DROID64_MENU_DISK_VIEWIMAGE, 'i', event -> imageViewFile());
 		GuiHelper.addMenuItem(popMenu, Resources.DROID64_MENU_DISK_VIEWTEXT, 't', event -> showFile());
 		GuiHelper.addMenuItem(popMenu, Resources.DROID64_MENU_DISK_COPYFILE, 'c', event -> copyFile());
@@ -1182,6 +1182,65 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			} else {
 				mainPanel.appendConsole("Failed to parse BASIC.");
 			}
+		}
+	}
+
+	/**
+	 * Write the directory of disk images to a text file: the loaded image, or the images selected in the file system list
+	 * (files and folders), or all images of the current folder when nothing is selected.
+	 */
+	public void dirText() {
+		if (zipFileLoaded) {
+			mainPanel.appendConsole("Dir Txt: not supported inside a zip file.");
+			return;
+		}
+		var files = new ArrayList<File>();
+		File folder;
+		if (imageLoaded) {
+			if (diskImage == null || diskImage.getFile() == null) {
+				return;
+			}
+			files.add(diskImage.getFile());
+			folder = diskImage.getFile().getAbsoluteFile().getParentFile();
+		} else {
+			folder = currentImagePath;
+			var rows = table.getSelectedRows();
+			for (var row : rows) {
+				if (!PARENT_DIR.equals(table.getValueAt(row, 1))) {
+					files.add(new File(getLocalFilename(row)));
+				}
+			}
+			if (files.isEmpty() && currentImagePath != null) {
+				files.add(currentImagePath);
+			}
+		}
+		var sources = DirText.collect(files);
+		if (sources.images.isEmpty()) {
+			JOptionPane.showMessageDialog(mainPanel.getParent(), "No Commodore disk or tape image found in the selection.", "Dir Txt",
+					JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
+		String defaultName;
+		if (sources.images.size() == 1) {
+			var n = sources.images.get(0).getName();
+			int dot = n.lastIndexOf('.');
+			defaultName = (dot > 0 ? n.substring(0, dot) : n) + ".txt";
+		} else {
+			defaultName = (folder != null && folder.getName().length() > 0 ? folder.getName() : "Disks") + "-dir.txt";
+		}
+		var chosen = FileDialogHelper.openTextFileDialog("Save directory listing", folder, defaultName, true, new String[] { ".txt" });
+		if (chosen == null) {
+			return;
+		}
+		try {
+			mainPanel.getParent().setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.WAIT_CURSOR));
+			var text = DirText.build(sources.images, sources.skipped);
+			Files.write(new File(chosen).toPath(), text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			mainPanel.appendConsole("Directory of " + sources.images.size() + " image(s) written to " + chosen);
+		} catch (Exception e) {	//NOSONAR
+			GuiHelper.showException(mainPanel.getParent(), "Error", e, "Failed to write the directory listing.");
+		} finally {
+			mainPanel.getParent().setCursor(java.awt.Cursor.getDefaultCursor());
 		}
 	}
 

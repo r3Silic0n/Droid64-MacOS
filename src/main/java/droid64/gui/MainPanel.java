@@ -377,7 +377,7 @@ public class MainPanel implements Serializable {
 		case VIEW_IMAGE_BUTTON:
 		case PLAY_MUSIC_BUTTON:
 		case VIEW_TEXT_BUTTON:
-		case VIEW_BASIC_BUTTON:
+		case DIR_TXT_BUTTON:
 			button.setBackground(adjustedColor(BASE_BUTTON_COLOR, 20, 20, -20));
 			break;
 		case FTP_BUTTON:
@@ -581,7 +581,7 @@ public class MainPanel implements Serializable {
 	private void createViewFileButtons() {
 		var viewTextButton = createButton(ActionButton.VIEW_TEXT_BUTTON, null);
 		var hexViewButton = createButton(ActionButton.PLAY_MUSIC_BUTTON, null);
-		var basicViewButton = createButton(ActionButton.VIEW_BASIC_BUTTON, null);
+		var dirTxtButton = createButton(ActionButton.DIR_TXT_BUTTON, null);
 		var hexEditButton = createButton(ActionButton.HEX_EDIT_BUTTON, null);
 		var imageViewButton = createButton(ActionButton.VIEW_IMAGE_BUTTON, null);
 		ActionListener viewListener = event -> {
@@ -596,8 +596,8 @@ public class MainPanel implements Serializable {
 				diskPanel.playMusic();
 			} else if (hexEditButton.getActionCommand().equals(cmd)) {
 				diskPanel.hexEditFile();
-			} else if (basicViewButton.getActionCommand().equals(cmd)) {
-				diskPanel.basicViewFile();
+			} else if (dirTxtButton.getActionCommand().equals(cmd)) {
+				diskPanel.dirText();
 			} else if (imageViewButton.getActionCommand().equals(cmd)) {
 				diskPanel.imageViewFile();
 			}
@@ -607,7 +607,7 @@ public class MainPanel implements Serializable {
 		};
 		viewTextButton.addActionListener(viewListener);
 		hexViewButton.addActionListener(viewListener);
-		basicViewButton.addActionListener(viewListener);
+		dirTxtButton.addActionListener(viewListener);
 		hexEditButton.addActionListener(viewListener);
 		imageViewButton.addActionListener(viewListener);
 	}
