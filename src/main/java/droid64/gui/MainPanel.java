@@ -159,7 +159,7 @@ public class MainPanel implements Serializable {
 	public MainPanel(JFrame parent) {
 		this.parent = parent;
 		FileDialogHelper.setOwner(parent);
-		parent.setTitle(DroiD64.PROGNAME+" v"+DroiD64.VERSION  );
+		parent.setTitle(DroiD64.PROGNAME + " - MacOS (" + DroiD64.VERSION + ")");
 
 		doSettings(parent);
 		installMacIntegration(parent);
