@@ -125,6 +125,7 @@ final class LongPressEditor extends MouseAdapter {
 				if (s == null) {
 					return;
 				}
+				s = applyCase(s);
 				int room = MAX_NAME - (fb.getDocument().getLength() - length);
 				if (room > 0) {
 					super.replace(fb, offset, length, s.length() > room ? s.substring(0, room) : s, a);
@@ -154,16 +155,6 @@ final class LongPressEditor extends MouseAdapter {
 		field.setFocusTraversalKeysEnabled(false);
 		field.addKeyListener(new KeyAdapter() {
 			@Override
-			public void keyTyped(KeyEvent ev) {
-				char c = ev.getKeyChar();
-				if (Character.isLetter(c) && c < 128 && !ev.isControlDown() && !ev.isMetaDown()) {
-					// as on the C64: capitals by default, lower case only with Shift (Caps Lock is ignored)
-					ev.consume();
-					field.replaceSelection(String.valueOf(ev.isShiftDown() ? Character.toLowerCase(c) : Character.toUpperCase(c)));
-				}
-			}
-
-			@Override
 			public void keyPressed(KeyEvent ev) {
 				if (ev.getKeyCode() == KeyEvent.VK_ENTER) {
 					ev.consume();
@@ -189,6 +180,24 @@ final class LongPressEditor extends MouseAdapter {
 		table.repaint(rect);
 	}
 
+	/**
+	 * As on the C64: letters are capitals, lower case only while Shift is held (Caps Lock is ignored).
+	 * Text that is not typed (paste) becomes capitals.
+	 */
+	private static String applyCase(String text) {
+		var event = java.awt.EventQueue.getCurrentEvent();
+		boolean shift = event instanceof KeyEvent && ((KeyEvent) event).isShiftDown();
+		var sb = new StringBuilder(text.length());
+		for (char c : text.toCharArray()) {
+			if (c < 128 && Character.isLetter(c)) {
+				sb.append(shift ? Character.toLowerCase(c) : Character.toUpperCase(c));
+			} else {
+				sb.append(c);
+			}
+		}
+		return sb.toString();
+	}
+
 	private void commit(int row, JTextField field) {
 		var newName = field.getText();
 		var oldName = String.valueOf(table.getValueAt(row, NAME_COLUMN));
@@ -210,14 +219,42 @@ final class LongPressEditor extends MouseAdapter {
 
 	private void showTypeMenu(int row, int column) {
 		var current = typeOf.apply(row);
+		Color fg = table.getForeground();
+		Color bg = table.getBackground();
+		var list = new javax.swing.JList<>(java.util.Arrays.stream(TYPES).map(FileType::name).toArray(String[]::new));
+		list.setFont(table.getFont());
+		list.setBackground(bg);
+		list.setForeground(fg);
+		// the selected line is shown reversed, like the BASIC cursor
+		list.setSelectionBackground(fg);
+		list.setSelectionForeground(bg);
+		list.setFixedCellHeight(table.getRowHeight());
+		list.setSelectedValue(current, false);
+		list.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
 		var menu = new JPopupMenu();
-		menu.setFont(Setting.SYS_FONT.getFont());
-		for (var type : TYPES) {
-			var item = new javax.swing.JMenuItem(type.name());
-			item.setEnabled(!type.name().equals(current));
-			item.addActionListener(e -> typeSetter.accept(row, type));
-			menu.add(item);
-		}
+		menu.setBorder(BorderFactory.createLineBorder(fg));
+		menu.setBackground(bg);
+		menu.setOpaque(true);
+		menu.add(list);
+		list.addMouseMotionListener(new MouseAdapter() {
+			@Override
+			public void mouseMoved(MouseEvent ev) {
+				int i = list.locationToIndex(ev.getPoint());
+				if (i >= 0) {
+					list.setSelectedIndex(i);
+				}
+			}
+		});
+		list.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseReleased(MouseEvent ev) {
+				int i = list.locationToIndex(ev.getPoint());
+				menu.setVisible(false);
+				if (i >= 0 && !TYPES[i].name().equals(current)) {
+					typeSetter.accept(row, TYPES[i]);
+				}
+			}
+		});
 		var rect = table.getCellRect(row, column, true);
 		menu.show(table, rect.x, rect.y + rect.height);
 	}
