@@ -225,6 +225,10 @@ public class SettingsPanel extends JPanel {
 		add(tabPane, BorderLayout.CENTER);
 
 		add(drawGeneralPanel(), BorderLayout.SOUTH);
+		java.awt.event.ActionListener viewSwitch = e -> mainPanel.applyViewSwitches(hideConsoleCheckBox.isSelected(),
+				bookmarkBarCheckBox.isSelected());
+		hideConsoleCheckBox.addActionListener(viewSwitch);
+		bookmarkBarCheckBox.addActionListener(viewSwitch);
 		addHierarchyListener(e -> GuiHelper.hierarchyListenerResizer(SwingUtilities.getWindowAncestor(this)));
 	}
 

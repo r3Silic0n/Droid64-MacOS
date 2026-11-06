@@ -485,7 +485,11 @@ public class MainPanel implements Serializable {
 			pluginButtons[i] = createButton(label != null ? label : "", actionButton, tooltip, pluginButtonListener);
 		}
 		consoleHideButton = createToggleButton(ActionButton.HIDE_CONSOLE_BUTTON,
-				ae-> hideConsole(consoleHideButton.isSelected()));
+				ae-> {
+					hideConsole(consoleHideButton.isSelected());
+					Setting.HIDECONSOLE.set(consoleHideButton.isSelected());
+					saveSettingsQuietly();
+				});
 		consoleHideButton.setSelected(Setting.HIDECONSOLE.getBoolean());
 		createButton(ActionButton.SETTINGS_BUTTON, ae -> showSettings(parent));
 		createButton(ActionButton.EXIT_BUTTON, ae -> exitThisProgram());
@@ -495,6 +499,15 @@ public class MainPanel implements Serializable {
 	private static boolean isOpenCbmProgram(ExternalProgram ep) {
 		var cmd = ep.getCommand();
 		return "opencbm".equalsIgnoreCase(cmd) || "d64copy".equals(cmd);
+	}
+
+	/** Applies the console / bookmark bar switches of the settings at once. */
+	public void applyViewSwitches(boolean hideConsole, boolean showBookmarkBar) {
+		Setting.HIDECONSOLE.set(hideConsole);
+		Setting.BOOKMARK_BAR.set(showBookmarkBar);
+		bookmarkBar.setVisible(showBookmarkBar);
+		hideConsole(hideConsole);
+		saveSettingsQuietly();
 	}
 
 	private void hideConsole(boolean hide) {
