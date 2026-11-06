@@ -215,6 +215,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 				row -> imageLoaded && !zipFileLoaded && tableModel.getMode() == EntryTableModel.MODE_CBM && diskImage != null
 						&& row < diskImage.getCbmFileSize() && diskImage.getCbmFile(row).getFileType() != FileType.CBM,
 				row -> diskImage.getCbmFile(row).getFileType().name(),
+				row -> diskImage.getCbmFile(row).getName(),
 				this::renameInPlace, (row, type) -> setTypeOfFiles(new int[] { row }, type));
 		final boolean[] popupShown = { false };
 		table.addMouseListener(new MouseAdapter() {
@@ -1442,9 +1443,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			diskImage.renameFile(row, newName, cbmFile.getFileType());
 			diskImage.save();
 			reloadDiskImage(true);
-			if (row < table.getRowCount()) {
-				table.setRowSelectionInterval(row, row);
-			}
+			table.clearSelection();
 		} catch (Exception e) {
 			GuiHelper.showException(mainPanel.getParent(), "Error", e, "Failed to rename file.");
 		}

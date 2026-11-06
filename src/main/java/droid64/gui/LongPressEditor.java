@@ -41,6 +41,7 @@ final class LongPressEditor extends MouseAdapter {
 	private final BiConsumer<Integer, String> renamer;
 	private final BiConsumer<Integer, FileType> typeSetter;
 	private final java.util.function.IntFunction<String> typeOf;
+	private final java.util.function.IntFunction<String> nameOf;
 	private final Timer timer;
 	private Point pressPoint;
 	private int pressRow = -1;
@@ -50,10 +51,11 @@ final class LongPressEditor extends MouseAdapter {
 	private long started;
 
 	LongPressEditor(JTable table, IntPredicate editable, java.util.function.IntFunction<String> typeOf,
-			BiConsumer<Integer, String> renamer, BiConsumer<Integer, FileType> typeSetter) {
+			java.util.function.IntFunction<String> nameOf, BiConsumer<Integer, String> renamer, BiConsumer<Integer, FileType> typeSetter) {
 		this.table = table;
 		this.editable = editable;
 		this.typeOf = typeOf;
+		this.nameOf = nameOf;
 		this.renamer = renamer;
 		this.typeSetter = typeSetter;
 		timer = new Timer(DELAY_MS, e -> fire());
@@ -132,8 +134,23 @@ final class LongPressEditor extends MouseAdapter {
 	private void startNameEdit(int row, int column) {
 		closeEditor();
 		var rect = table.getCellRect(row, column, true);
-		var text = String.valueOf(table.getValueAt(row, column));
-		var field = new JTextField();
+		var text = nameOf.apply(row);
+		var fm = table.getFontMetrics(table.getFont());
+		var prefix = " \"";
+		int prefixWidth = fm.stringWidth(prefix);
+		// the list shows the name as  "NAME"  - the field starts after the space and the quote, so the text stays where it was
+		var field = new JTextField() {
+			private static final long serialVersionUID = 1L;
+
+			@Override
+			protected void paintComponent(java.awt.Graphics g) {
+				super.paintComponent(g);
+				g.setColor(getForeground());
+				g.setFont(getFont());
+				var m = g.getFontMetrics();
+				g.drawString(prefix, 0, (getHeight() - m.getHeight()) / 2 + m.getAscent());
+			}
+		};
 		var doc = new PlainDocument();
 		doc.setDocumentFilter(new DocumentFilter() {
 			@Override
@@ -158,15 +175,16 @@ final class LongPressEditor extends MouseAdapter {
 		field.setDocument(doc);
 		field.setText(text.length() > MAX_NAME ? text.substring(0, MAX_NAME) : text);
 		field.setFont(table.getFont());
-		// like a BASIC cursor line: the list colours, reversed
+		// the list colours (not reversed), so it stays readable on a selected, reversed row
 		Color fg = table.getForeground();
 		Color bg = table.getBackground();
-		field.setBackground(fg);
-		field.setForeground(bg);
-		field.setCaretColor(bg);
-		field.setSelectionColor(bg);
-		field.setSelectedTextColor(fg);
-		field.setBorder(BorderFactory.createEmptyBorder());
+		field.setOpaque(true);
+		field.setBackground(bg);
+		field.setForeground(fg);
+		field.setCaretColor(fg);
+		field.setSelectionColor(fg);
+		field.setSelectedTextColor(bg);
+		field.setBorder(BorderFactory.createEmptyBorder(0, prefixWidth, 0, 0));
 		field.setBounds(rect.x, rect.y, rect.width, rect.height);
 		field.setFocusTraversalKeysEnabled(false);
 		field.addKeyListener(new KeyAdapter() {
@@ -244,7 +262,7 @@ final class LongPressEditor extends MouseAdapter {
 
 	private void commit(int row, JTextField field) {
 		var newName = field.getText();
-		var oldName = String.valueOf(table.getValueAt(row, NAME_COLUMN));
+		var oldName = nameOf.apply(row);
 		closeEditor();
 		if (!newName.isEmpty() && !newName.equals(oldName)) {
 			renamer.accept(row, newName);
@@ -267,17 +285,17 @@ final class LongPressEditor extends MouseAdapter {
 		Color bg = table.getBackground();
 		var list = new javax.swing.JList<>(java.util.Arrays.stream(TYPES).map(FileType::name).toArray(String[]::new));
 		list.setFont(table.getFont());
-		list.setBackground(bg);
-		list.setForeground(fg);
-		// the selected line is shown reversed, like the BASIC cursor
-		list.setSelectionBackground(fg);
-		list.setSelectionForeground(bg);
+		// inverse colours: the list background as text, the list text colour as background; the selected line is the normal way round
+		list.setBackground(fg);
+		list.setForeground(bg);
+		list.setSelectionBackground(bg);
+		list.setSelectionForeground(fg);
 		list.setFixedCellHeight(table.getRowHeight());
 		list.setSelectedValue(current, false);
 		list.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
 		var menu = new JPopupMenu();
-		menu.setBorder(BorderFactory.createLineBorder(fg));
-		menu.setBackground(bg);
+		menu.setBorder(BorderFactory.createLineBorder(bg));
+		menu.setBackground(fg);
 		menu.setOpaque(true);
 		menu.add(list);
 		list.addMouseMotionListener(new MouseAdapter() {
