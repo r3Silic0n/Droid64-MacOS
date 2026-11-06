@@ -91,7 +91,7 @@ public class SettingsPanel extends JPanel {
 			Utility.getMessage(Resources.DROID64_SETTINGS_HIDECONSOLE));
 	private final JCheckBox bookmarkBarCheckBox = new JCheckBox(
 			Utility.getMessage(Resources.DROID64_SETTINGS_BOOKMARKBAR));
-	private final JComboBox<UIManager.LookAndFeelInfo> lookAndFeelBox = new JComboBox<>(UIManager.getInstalledLookAndFeels());
+	private final JComboBox<UIManager.LookAndFeelInfo> lookAndFeelBox = new JComboBox<>(GuiHelper.getLookAndFeels().toArray(new UIManager.LookAndFeelInfo[0]));
 	private final JSpinner rowHeightSpinner = new JSpinner(
 			new SpinnerNumberModel((int) Setting.ROW_HEIGHT.getInteger(), 4, 256, 1));
 	private final JSpinner localRowHeightSpinner = new JSpinner(
@@ -404,6 +404,19 @@ public class SettingsPanel extends JPanel {
 				? UIManager.getSystemLookAndFeelClassName() : Setting.LOOK_AND_FEEL.getString();
 		var laf=GuiHelper.getLookAndFeels().stream().filter(f->f.getClassName().equals(curLaf)).findFirst().orElse(null);
 		lookAndFeelBox.setSelectedItem(laf);
+		lookAndFeelBox.addActionListener(e -> {
+			var sel = lookAndFeelBox.getSelectedItem();
+			if (sel instanceof UIManager.LookAndFeelInfo) {
+				Setting.LOOK_AND_FEEL.set(((UIManager.LookAndFeelInfo) sel).getClassName());
+				mainPanel.applyLookAndFeel();
+				SwingUtilities.updateComponentTreeUI(this);
+				var w = SwingUtilities.getWindowAncestor(this);
+				if (w != null) {
+					SwingUtilities.updateComponentTreeUI(w);
+					w.pack();
+				}
+			}
+		});
 
 		rowHeightSpinner.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_GRIDSPACING_TOOLTIP));
 

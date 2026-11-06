@@ -1098,6 +1098,12 @@ public class MainPanel implements Serializable {
 		}
 	}
 
+	/** Applies the look and feel of the settings at once (used while the settings window is open). */
+	public void applyLookAndFeel() {
+		setLookAndFeel(parent, Setting.LOOK_AND_FEEL.getString());
+		saveSettingsQuietly();
+	}
+
 	/**
 	 * Apply settings to GUI
 	 */
