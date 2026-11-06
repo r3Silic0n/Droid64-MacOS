@@ -159,7 +159,7 @@ public enum Setting {
 	private static final String DEFAULT_BOOKMARK_FILE_NAME = ".droid64_book.xml";
 	public static final int MAX_PLUGINS = 8;
 	/** Number of additional emulators that can be added in Settings; they use the plugin slots after the built-in ones. */
-	public static final int EXTRA_EMULATORS = 3;
+	public static final int EXTRA_EMULATORS = 24;
 	/**
 	 * Constructor
 	 * @param id the id of the parameter

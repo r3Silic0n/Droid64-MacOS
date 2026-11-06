@@ -235,6 +235,57 @@ public class SettingsPanel extends JPanel {
 		return generalPanel;
 	}
 	
+	/** One row of the "Other emulators" list: name, program, arguments and a remove button. Saved as you type. */
+	private JPanel emulatorRow(JPanel rowsPanel, int index, java.util.Set<Integer> usedSlots, JButton addButton) {
+		final int slot = Setting.MAX_PLUGINS + index;
+		var prg = Setting.getExternalProgram(slot);
+		var nameField = new JTextField(prg != null && prg.getLabel() != null ? prg.getLabel() : "", 12);
+		nameField.setToolTipText("Name shown in the Plugins menu");
+		var argsField = new JTextField(prg != null && prg.getArguments() != null ? prg.getArguments() : "{Image}", 18);
+		argsField.setToolTipText(ARGUMENT_TOOLTIP);
+		var pathPanel = new FilePathPanel(new File(prg != null && prg.getCommand() != null ? prg.getCommand() : ""),
+				JFileChooser.FILES_ONLY, null);
+		pathPanel.setToolTipText("Path to the emulator, or to its .app bundle");
+		final boolean[] removed = { false };
+		Runnable store = () -> {
+			if (removed[0]) {
+				return;
+			}
+			var cmd = pathPanel.getPath();
+			var label = nameField.getText().trim();
+			Setting.setExternalProgram(slot, new ExternalProgram(cmd == null ? "" : cmd, argsField.getText(), label, label, true));
+		};
+		pathPanel.addTextListener(text -> store.run());
+		javax.swing.event.DocumentListener dl = new javax.swing.event.DocumentListener() {
+			public void insertUpdate(javax.swing.event.DocumentEvent ev) { store.run(); }
+			public void removeUpdate(javax.swing.event.DocumentEvent ev) { store.run(); }
+			public void changedUpdate(javax.swing.event.DocumentEvent ev) { store.run(); }
+		};
+		nameField.getDocument().addDocumentListener(dl);
+		argsField.getDocument().addDocumentListener(dl);
+		var remove = new JButton("Remove");
+		var row = new JPanel(new BorderLayout(4, 0));
+		remove.addActionListener(ev -> {
+			removed[0] = true;
+			Setting.setExternalProgram(slot, new ExternalProgram("", "", "", "", true));
+			usedSlots.remove(index);
+			rowsPanel.remove(row);
+			addButton.setEnabled(true);
+			rowsPanel.revalidate();
+			rowsPanel.repaint();
+		});
+		var left = new JPanel(new BorderLayout(4, 0));
+		left.add(nameField, BorderLayout.WEST);
+		left.add(pathPanel, BorderLayout.CENTER);
+		var right = new JPanel(new BorderLayout(4, 0));
+		right.add(argsField, BorderLayout.CENTER);
+		right.add(remove, BorderLayout.EAST);
+		row.add(left, BorderLayout.CENTER);
+		row.add(right, BorderLayout.EAST);
+		row.setBorder(BorderFactory.createEmptyBorder(1, 0, 1, 0));
+		return row;
+	}
+
 	/** Paths to the VICE emulators started by the VICE buttons. */
 	private JPanel drawVicePanel() {
 		var panel = new JPanel(new GridBagLayout());
@@ -261,39 +312,42 @@ public class SettingsPanel extends JPanel {
 		extraHeading.setFont(extraHeading.getFont().deriveFont(java.awt.Font.BOLD));
 		GuiHelper.addToGridBag(0, extraRow++, 1.0, 0.0, 2, gbc, panel, new javax.swing.JSeparator());
 		GuiHelper.addToGridBag(0, extraRow++, 1.0, 0.0, 2, gbc, panel, extraHeading);
+		var rowsPanel = new JPanel();
+		rowsPanel.setLayout(new javax.swing.BoxLayout(rowsPanel, javax.swing.BoxLayout.Y_AXIS));
+		var usedSlots = new java.util.TreeSet<Integer>();
+		var addButton = new JButton("Add emulator");
 		for (int e = 0; e < Setting.EXTRA_EMULATORS; e++) {
-			final int slot = Setting.MAX_PLUGINS + e;
-			var prg = Setting.getExternalProgram(slot);
-			var nameField = new JTextField(prg != null && prg.getLabel() != null ? prg.getLabel() : "", 12);
-			nameField.setToolTipText("Name shown in the Plugins menu");
-			var argsField = new JTextField(prg != null && prg.getArguments() != null ? prg.getArguments() : "{Image}", 24);
-			argsField.setToolTipText(ARGUMENT_TOOLTIP);
-			var pathPanel = new FilePathPanel(new File(prg != null && prg.getCommand() != null ? prg.getCommand() : ""),
-					JFileChooser.FILES_ONLY, null);
-			pathPanel.setToolTipText("Path to the emulator, or to its .app bundle");
-			Runnable store = () -> {
-				var cmd = pathPanel.getPath();
-				var label = nameField.getText().trim();
-				Setting.setExternalProgram(slot, new ExternalProgram(cmd == null ? "" : cmd, argsField.getText(),
-						label, label, true));
-			};
-			pathPanel.addTextListener(text -> store.run());
-			javax.swing.event.DocumentListener dl = new javax.swing.event.DocumentListener() {
-				public void insertUpdate(javax.swing.event.DocumentEvent ev) { store.run(); }
-				public void removeUpdate(javax.swing.event.DocumentEvent ev) { store.run(); }
-				public void changedUpdate(javax.swing.event.DocumentEvent ev) { store.run(); }
-			};
-			nameField.getDocument().addDocumentListener(dl);
-			argsField.getDocument().addDocumentListener(dl);
-			var row = new JPanel(new BorderLayout(4, 0));
-			var left = new JPanel(new BorderLayout(4, 0));
-			left.add(nameField, BorderLayout.WEST);
-			left.add(pathPanel, BorderLayout.CENTER);
-			row.add(left, BorderLayout.CENTER);
-			row.add(argsField, BorderLayout.EAST);
-			GuiHelper.addToGridBag(0, extraRow, 0.0, 0.0, 1, gbc, panel, new JLabel("Emulator " + (e + 1)));
-			GuiHelper.addToGridBag(1, extraRow++, 1.0, 0.0, 1, gbc, panel, row);
+			if (Setting.getExternalProgram(Setting.MAX_PLUGINS + e) != null) {
+				usedSlots.add(e);
+				rowsPanel.add(emulatorRow(rowsPanel, e, usedSlots, addButton));
+			}
 		}
+		addButton.addActionListener(ev -> {
+			for (int e = 0; e < Setting.EXTRA_EMULATORS; e++) {
+				if (!usedSlots.contains(e)) {
+					usedSlots.add(e);
+					rowsPanel.add(emulatorRow(rowsPanel, e, usedSlots, addButton));
+					addButton.setEnabled(usedSlots.size() < Setting.EXTRA_EMULATORS);
+					rowsPanel.revalidate();
+					rowsPanel.repaint();
+					break;
+				}
+			}
+		});
+		if (usedSlots.isEmpty()) {
+			addButton.doClick();
+		}
+		var rowsHolder = new JPanel(new BorderLayout());
+		rowsHolder.add(rowsPanel, BorderLayout.NORTH);
+		var rowsScroll = new JScrollPane(rowsHolder, javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+				javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		rowsScroll.setPreferredSize(new Dimension(400, 104));
+		rowsScroll.setBorder(BorderFactory.createEmptyBorder());
+		GuiHelper.addToGridBag(0, extraRow, 1.0, 0.0, 2, gbc, panel, rowsScroll);
+		extraRow++;
+		var addPanel = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 0));
+		addPanel.add(addButton);
+		GuiHelper.addToGridBag(0, extraRow, 1.0, 0.0, 2, gbc, panel, addPanel);
 		// HVSC: the collection has to exist on this machine
 		var hv = new FilePathPanel(new File(Setting.HVSC_DIR.getString() == null ? "" : Setting.HVSC_DIR.getString()),
 				JFileChooser.DIRECTORIES_ONLY, f -> Setting.HVSC_DIR.set(f.getPath()));
