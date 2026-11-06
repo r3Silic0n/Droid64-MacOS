@@ -143,12 +143,6 @@ public class SettingsPanel extends JPanel {
 	private Font sysFont = Setting.SYS_FONT.getFont();
 	private Font consoleFont = Setting.CONSOLE_FONT.getFont();
 
-	// Plugin settings
-	private final JTextField[] pluginLabelTextField = new JTextField[Setting.MAX_PLUGINS];
-	private final FilePathPanel[] pluginCommandField = new FilePathPanel[Setting.MAX_PLUGINS];
-	private final JTextArea[] pluginArgumentTextField = new JTextArea[Setting.MAX_PLUGINS];
-	private final JTextArea[] pluginDescriptionTextField = new JTextArea[Setting.MAX_PLUGINS];
-	private final JCheckBox[] forkThreadCheckBox = new JCheckBox[Setting.MAX_PLUGINS];
 
 	// Database settings
 	private final JCheckBox useJdbcCheckBox = new JCheckBox(Utility.getMessage(Resources.DROID64_SETTINGS_JDBC_USEDB));
@@ -207,13 +201,6 @@ public class SettingsPanel extends JPanel {
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_FILES), new JScrollPane(drawFilesPanel()));
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_DATABASE), new JScrollPane(drawDatabasePanel()));
 
-		var pluginTabPane = new JTabbedPane();
-		var pluginPanel = drawPluginPanel();
-		for (var i = 0; i < Setting.MAX_PLUGINS; i++) {
-			pluginTabPane.addTab(Integer.toString(i + 1), pluginPanel[i]);
-		}
-		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_PLUGIN), new JScrollPane(pluginTabPane));
-
 		add(tabPane, BorderLayout.CENTER);
 
 		add(drawGeneralPanel(), BorderLayout.SOUTH);
@@ -267,6 +254,45 @@ public class SettingsPanel extends JPanel {
 			fp.addTextListener(text -> setting.set(text));
 			GuiHelper.addToGridBag(0, i, 0.0, 0.0, 1, gbc, panel, new JLabel(names[i]));
 			GuiHelper.addToGridBag(1, i, 1.0, 0.0, 1, gbc, panel, fp);
+		}
+		// other emulators (right-click menu / Plugins)
+		int extraRow = names.length + 20;
+		var extraHeading = new JLabel("Other emulators: name, program, arguments (shown in the right-click menu, Plugins)");
+		extraHeading.setFont(extraHeading.getFont().deriveFont(java.awt.Font.BOLD));
+		GuiHelper.addToGridBag(0, extraRow++, 1.0, 0.0, 2, gbc, panel, new javax.swing.JSeparator());
+		GuiHelper.addToGridBag(0, extraRow++, 1.0, 0.0, 2, gbc, panel, extraHeading);
+		for (int e = 0; e < Setting.EXTRA_EMULATORS; e++) {
+			final int slot = Setting.MAX_PLUGINS + e;
+			var prg = Setting.getExternalProgram(slot);
+			var nameField = new JTextField(prg != null && prg.getLabel() != null ? prg.getLabel() : "", 12);
+			nameField.setToolTipText("Name shown in the Plugins menu");
+			var argsField = new JTextField(prg != null && prg.getArguments() != null ? prg.getArguments() : "{Image}", 24);
+			argsField.setToolTipText(ARGUMENT_TOOLTIP);
+			var pathPanel = new FilePathPanel(new File(prg != null && prg.getCommand() != null ? prg.getCommand() : ""),
+					JFileChooser.FILES_ONLY, null);
+			pathPanel.setToolTipText("Path to the emulator, or to its .app bundle");
+			Runnable store = () -> {
+				var cmd = pathPanel.getPath();
+				var label = nameField.getText().trim();
+				Setting.setExternalProgram(slot, new ExternalProgram(cmd == null ? "" : cmd, argsField.getText(),
+						label, label, true));
+			};
+			pathPanel.addTextListener(text -> store.run());
+			javax.swing.event.DocumentListener dl = new javax.swing.event.DocumentListener() {
+				public void insertUpdate(javax.swing.event.DocumentEvent ev) { store.run(); }
+				public void removeUpdate(javax.swing.event.DocumentEvent ev) { store.run(); }
+				public void changedUpdate(javax.swing.event.DocumentEvent ev) { store.run(); }
+			};
+			nameField.getDocument().addDocumentListener(dl);
+			argsField.getDocument().addDocumentListener(dl);
+			var row = new JPanel(new BorderLayout(4, 0));
+			var left = new JPanel(new BorderLayout(4, 0));
+			left.add(nameField, BorderLayout.WEST);
+			left.add(pathPanel, BorderLayout.CENTER);
+			row.add(left, BorderLayout.CENTER);
+			row.add(argsField, BorderLayout.EAST);
+			GuiHelper.addToGridBag(0, extraRow, 0.0, 0.0, 1, gbc, panel, new JLabel("Emulator " + (e + 1)));
+			GuiHelper.addToGridBag(1, extraRow++, 1.0, 0.0, 1, gbc, panel, row);
 		}
 		// HVSC: the collection has to exist on this machine
 		var hv = new FilePathPanel(new File(Setting.HVSC_DIR.getString() == null ? "" : Setting.HVSC_DIR.getString()),
@@ -615,14 +641,6 @@ public class SettingsPanel extends JPanel {
 		} catch (NumberFormatException e) {
 			maxRows.setValue(25L);
 		}
-
-		for (var i = 0; i < pluginCommandField.length; i++) {
-			mainPanel.setPluginButtonLabel(i, pluginLabelTextField[i].getText());
-			var prg = new ExternalProgram(pluginCommandField[i].getPath(), pluginArgumentTextField[i].getText(),
-					pluginDescriptionTextField[i].getText(), pluginLabelTextField[i].getText(),
-					forkThreadCheckBox[i].isSelected());
-			Setting.setExternalProgram(i, prg);
-		}
 	}
 
 	/** Colour swatch that is an ordinary button of the current look and feel, with the colour as its icon. */
@@ -872,78 +890,6 @@ public class SettingsPanel extends JPanel {
 		}
 	}
 
-	/**
-	 * Setup MAX_PLUGINS of panels for plugins.
-	 *
-	 * @param mainPanel
-	 * @return JPanel[]
-	 */
-	private JPanel[] drawPluginPanel() {
-		var pluginPanel = new JPanel[Setting.MAX_PLUGINS];
-
-		var fileFilter = new FileFilter() {
-			@Override
-			public boolean accept(File f) {
-				return f.canExecute();
-			}
-
-			@Override
-			public String getDescription() {
-				return "Executable";
-			}
-		};
-
-		for (var i = 0; i < Setting.MAX_PLUGINS; i++) {
-			pluginPanel[i] = new JPanel(new GridBagLayout());
-			var gbc = new GridBagConstraints();
-			gbc.fill = GridBagConstraints.HORIZONTAL;
-
-			pluginLabelTextField[i] = getTextField(Resources.DROID64_SETTINGS_EXE_LABEL_TOOLTIP);
-
-			pluginCommandField[i] = new FilePathPanel(Setting.DEFAULT_IMAGE_DIR.getFile(), JFileChooser.FILES_ONLY,
-					null);
-			pluginCommandField[i].setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_EXE_CHOOSE_TOOLTIP));
-			pluginCommandField[i].setFileFilter(fileFilter);
-
-			pluginArgumentTextField[i] = getTextArea(ARGUMENT_TOOLTIP);
-			pluginDescriptionTextField[i] = getTextArea(
-					Utility.getMessage(Resources.DROID64_SETTINGS_EXE_DESCR_TOOLTIP));
-			forkThreadCheckBox[i] = new JCheckBox(Utility.EMPTY, true);
-			forkThreadCheckBox[i].setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_EXE_FORK_TOOLTIP));
-			
-			var prg = Setting.getExternalProgram(i);
-			if (prg != null) {
-				pluginLabelTextField[i].setText(prg.getLabel());
-				pluginCommandField[i].setPath(prg.getCommand());
-				pluginArgumentTextField[i].setText(prg.getArguments());
-				pluginDescriptionTextField[i].setText(prg.getDescription());
-				forkThreadCheckBox[i].setSelected(prg.isForkThread());
-			}
-
-			GuiHelper.addToGridBag(0, 0, 0.0, 0.0, 1, gbc, pluginPanel[i],
-					new JLabel(Utility.getMessage(Resources.DROID64_SETTINGS_EXE_LABEL)));
-			GuiHelper.addToGridBag(1, 0, 0.5, 0.0, 1, gbc, pluginPanel[i], pluginLabelTextField[i]);
-
-			GuiHelper.addToGridBag(0, 1, 0.0, 0.0, 1, gbc, pluginPanel[i],
-					new JLabel(Utility.getMessage(Resources.DROID64_SETTINGS_EXE_COMMAND)));
-			GuiHelper.addToGridBag(1, 1, 0.5, 0.0, 1, gbc, pluginPanel[i], pluginCommandField[i]);
-
-			GuiHelper.addToGridBag(0, 2, 0.0, 0.0, 1, gbc, pluginPanel[i],
-					new JLabel(Utility.getMessage(Resources.DROID64_SETTINGS_EXE_ARGS)));
-			GuiHelper.addToGridBag(1, 2, 0.5, 0.0, 1, gbc, pluginPanel[i], pluginArgumentTextField[i]);
-
-			GuiHelper.addToGridBag(0, 3, 0.0, 0.0, 1, gbc, pluginPanel[i],
-					new JLabel(Utility.getMessage(Resources.DROID64_SETTINGS_EXE_DESCR)));
-			GuiHelper.addToGridBag(1, 3, 0.5, 0.0, 1, gbc, pluginPanel[i], pluginDescriptionTextField[i]);
-
-			GuiHelper.addToGridBag(0, 4, 0.0, 0.0, 1, gbc, pluginPanel[i],
-					new JLabel(Utility.getMessage(Resources.DROID64_SETTINGS_EXE_FORK)));
-			GuiHelper.addToGridBag(1, 4, 0.5, 0.0, 1, gbc, pluginPanel[i], forkThreadCheckBox[i]);
-	
-			GuiHelper.addToGridBag(0, 5, 0.5, 1.0, 2, gbc, pluginPanel[i], new JPanel());
-		}
-		return pluginPanel;
-	}
 
 	private JTextArea getTextArea(String toolTip) {
 		var area = new JTextArea(4, 20);

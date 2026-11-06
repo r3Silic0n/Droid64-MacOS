@@ -272,11 +272,15 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 		var pluginMenu = new JMenu("Plugins");
 		pluginMenu.setMnemonic('p');
-		for ( ExternalProgram ep : Setting.getExternalPrograms()) {
-			if (ep != null) {
-				GuiHelper.addMenuItem(pluginMenu, ep.getLabel(), null, event ->	doExternalProgram(ep));
+		Runnable fillPlugins = () -> {
+			pluginMenu.removeAll();
+			for ( ExternalProgram ep : Setting.getExternalPrograms()) {
+				if (ep != null && !Utility.isEmpty(ep.getLabel())) {
+					GuiHelper.addMenuItem(pluginMenu, ep.getLabel(), null, event ->	doExternalProgram(ep));
+				}
 			}
-		}
+		};
+		fillPlugins.run();
 		popMenu.add(pluginMenu);
 		var mkdirItem = new javax.swing.JMenuItem("Make directory...");
 		mkdirItem.addActionListener(event -> mkdir());
@@ -286,6 +290,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
 				// only on the file system, not inside a disk image or zip file
 				mkdirItem.setVisible(!imageLoaded && !zipFileLoaded);
+				fillPlugins.run();
 			}
 
 			@Override

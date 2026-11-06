@@ -158,6 +158,8 @@ public enum Setting {
 	/** Default name of bookmark settings file (without path). */
 	private static final String DEFAULT_BOOKMARK_FILE_NAME = ".droid64_book.xml";
 	public static final int MAX_PLUGINS = 8;
+	/** Number of additional emulators that can be added in Settings; they use the plugin slots after the built-in ones. */
+	public static final int EXTRA_EMULATORS = 3;
 	/**
 	 * Constructor
 	 * @param id the id of the parameter
@@ -567,17 +569,20 @@ public enum Setting {
 
 	public static List<ExternalProgram> getExternalPrograms() {
 		var list = new ArrayList<ExternalProgram>();
-		for (int i=0; i < MAX_PLUGINS; i++) {
+		for (int i=0; i < MAX_PLUGINS + EXTRA_EMULATORS; i++) {
 			list.add(getExternalProgram(i));
 		}
 		return list;
 	}
 	@SuppressWarnings("unchecked")
 	public static ExternalProgram getExternalProgram(int num) {
-		if (num < 0  || num >= MAX_PLUGINS) {
+		if (num < 0  || num >= MAX_PLUGINS + EXTRA_EMULATORS) {
 			return null;
 		}
 		String cmd = Utility.getListItem((List<String>) PLUGIN_COMMAND.get(), num);
+		if (num >= MAX_PLUGINS && Utility.isEmpty(cmd)) {
+			return null;	// extra emulator slot that is not used
+		}
 		String args = Utility.getListItem((List<String>) PLUGIN_ARGUMENTS.get(), num);
 		String descr = Utility.getListItem((List<String>) PLUGIN_DESCRIPTION.get(), num);
 		String label = Utility.getListItem((List<String>) PLUGIN_LABEL.get(), num);

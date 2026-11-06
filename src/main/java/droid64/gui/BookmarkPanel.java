@@ -120,7 +120,9 @@ public class BookmarkPanel extends JPanel {
 		pluginNo.addItem(DEFAULT);
 		pluginNo.setToolTipText("Plugin to execute when bookmark has been opened");
 		for (var i = 0; i < epList.size(); i++) {
-			pluginNo.addItem(new Pair(i, epList.get(i).getLabel()));
+			if (epList.get(i) != null) {
+				pluginNo.addItem(new Pair(i, epList.get(i).getLabel()));
+			}
 		}
 
 		setLayout(new GridBagLayout());

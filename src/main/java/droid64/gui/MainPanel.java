@@ -451,7 +451,7 @@ public class MainPanel implements Serializable {
 	private void createOtherButtons(final JFrame parent) {
 		ActionListener pluginButtonListener = event -> {
 			var list = Setting.getExternalPrograms();
-			for (int cnt = 0; cnt < list.size(); cnt ++){
+			for (int cnt = 0; cnt < list.size() && cnt < pluginButtons.length; cnt ++){
 				if (event.getSource() == pluginButtons[cnt] ){
 					var diskPanel = getActiveDiskPanel();
 					var prg = list.get(cnt);
