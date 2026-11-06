@@ -141,9 +141,45 @@ public class ImageConvertDialog extends JDialog {
 					item.file.getName(), item.file.getFileType(), item.file.getSizeInBlocks(), item.note });
 		}
 		var table = new JTable(model);
+		// Same look as the file list: the detected machine's palette and the CBM font
+		var machine = image.isCpmImage() ? null : MachineDetector.detect(image);
+		var bg = Setting.DIR_BG.getColor();
+		var fg = Setting.DIR_FG.getColor();
+		if (machine != null && machine != C64.Machine.C64) {
+			bg = machine.background;
+			fg = machine.foreground;
+		}
+		var cbmFont = Setting.CBM_FONT.getFont();
+		if (cbmFont != null && Setting.FONT_SIZE.getInteger() != null) {
+			cbmFont = cbmFont.deriveFont((float) Setting.FONT_SIZE.getInteger());
+		}
+		if (cbmFont != null) {
+			table.setFont(cbmFont);
+		}
+		table.setBackground(bg);
+		table.setForeground(fg);
+		table.setGridColor(bg);
+		table.setIntercellSpacing(new Dimension(0, 0));
+		table.setRowHeight(Math.max(16, Setting.ROW_HEIGHT.getInteger()));
+		table.setShowGrid(false);
+		table.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() {
+			private static final long serialVersionUID = 1L;
+
+			@Override
+			public java.awt.Component getTableCellRendererComponent(JTable t, Object value, boolean sel, boolean focus, int row, int col) {
+				var l = new JLabel(value != null ? value.toString() : "");
+				l.setOpaque(true);
+				// status and note are ordinary text, the rest uses the CBM font
+				l.setFont(col == 0 || col == 4 ? Setting.SYS_FONT.getFont() != null ? Setting.SYS_FONT.getFont().deriveFont(12f) : t.getFont() : t.getFont());
+				l.setForeground(t.getForeground());
+				l.setBackground(t.getBackground());
+				return l;
+			}
+		});
 		table.getColumnModel().getColumn(0).setMaxWidth(46);
 		table.getColumnModel().getColumn(3).setMaxWidth(60);
 		var scroll = new JScrollPane(table);
+		scroll.getViewport().setBackground(bg);
 		scroll.setPreferredSize(new Dimension(560, 220));
 		scroll.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10), scroll.getBorder()));
 
