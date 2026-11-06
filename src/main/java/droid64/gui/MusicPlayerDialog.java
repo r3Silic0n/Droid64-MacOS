@@ -1071,6 +1071,8 @@ public class MusicPlayerDialog extends JDialog {
 		private final double[] level = new double[3];	// smoothed levels which are drawn
 		private final double[] peak = new double[3];
 		private final short[] scope = new short[1024];
+		private final float[] shown = new float[512];	// triggered, smoothed scope trace
+		private final float[] ghost = new float[512];	// previous frame, drawn faint (afterglow)
 		private int chips = 1;
 		private boolean live;
 		private transient SidEngine engine;
@@ -1089,6 +1091,8 @@ public class MusicPlayerDialog extends JDialog {
 			java.util.Arrays.fill(level, 0);
 			java.util.Arrays.fill(peak, 0);
 			java.util.Arrays.fill(scope, (short) 0);
+			java.util.Arrays.fill(shown, 0f);
+			java.util.Arrays.fill(ghost, 0f);
 			repaint();
 		}
 
@@ -1130,7 +1134,36 @@ public class MusicPlayerDialog extends JDialog {
 				scope[i] = src[(pos + i) & 1023];
 			}
 			chips = e.getChipCount();
+			// trigger on a rising zero crossing so that the trace stands still instead of scrolling
+			int t = 0;
+			for (int i = 1; i < 512; i++) {
+				if (scope[i - 1] < 0 && scope[i] >= 0) {
+					t = i;
+					break;
+				}
+			}
+			System.arraycopy(shown, 0, ghost, 0, 512);
+			for (int i = 0; i < 512; i++) {
+				shown[i] += (scope[t + i] - shown[i]) * 0.55f;
+			}
 			repaint();
+		}
+
+		private static java.awt.geom.Path2D.Float tracePath(float[] data, int x0, int sw, int h) {
+			var path = new java.awt.geom.Path2D.Float();
+			for (int x = 0; x < sw; x++) {
+				double pos = x * (data.length - 1.0) / Math.max(1, sw - 1);
+				int i0 = (int) pos;
+				int i1 = Math.min(data.length - 1, i0 + 1);
+				double v = data[i0] + (data[i1] - data[i0]) * (pos - i0);
+				float y = (float) (h / 2.0 - v * (h / 2.0 - 8) / 32768.0);
+				if (x == 0) {
+					path.moveTo(x0, y);
+				} else {
+					path.lineTo(x0 + x, y);
+				}
+			}
+			return path;
 		}
 
 		@Override
@@ -1165,22 +1198,11 @@ public class MusicPlayerDialog extends JDialog {
 			g.setColor(new Color(30, 60, 30));
 			g.drawLine(x0, h / 2, x0 + sw, h / 2);
 			if (live) {
-				g.setColor(new Color(120, 255, 120));
 				g.setStroke(new java.awt.BasicStroke(1.4f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
-				var path = new java.awt.geom.Path2D.Float();
-				for (int x = 0; x < sw; x++) {
-					double pos = x * 1023.0 / Math.max(1, sw - 1);
-					int i0 = (int) pos;
-					int i1 = Math.min(1023, i0 + 1);
-					double v = scope[i0] + (scope[i1] - scope[i0]) * (pos - i0);
-					float y = (float) (h / 2.0 - v * (h / 2.0 - 8) / 32768.0);
-					if (x == 0) {
-						path.moveTo(x0, y);
-					} else {
-						path.lineTo(x0 + x, y);
-					}
-				}
-				g.draw(path);
+				g.setColor(new Color(120, 255, 120, 70));
+				g.draw(tracePath(ghost, x0, sw, h));
+				g.setColor(new Color(120, 255, 120));
+				g.draw(tracePath(shown, x0, sw, h));
 				if (chips > 1) {
 					g.setColor(Color.GRAY);
 					g.drawString(chips + " SIDs (meters: first chip)", x0 + 4, 14);
