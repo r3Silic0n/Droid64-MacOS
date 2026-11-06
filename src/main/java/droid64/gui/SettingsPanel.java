@@ -96,7 +96,6 @@ public class SettingsPanel extends JPanel {
 			new SpinnerNumberModel((int) Setting.ROW_HEIGHT.getInteger(), 4, 256, 1));
 	private final JSpinner localRowHeightSpinner = new JSpinner(
 			new SpinnerNumberModel((int) Setting.LOCAL_ROW_HEIGHT.getInteger(), 8, 256, 1));
-	private final JTextField winSizePosField = new JTextField(getWindowSizePosString());
 
 	// Files
 	private final JTextField extRemoval = new JTextField(
@@ -139,12 +138,6 @@ public class SettingsPanel extends JPanel {
 			Setting.FILE_EXT_T64_GZ.getList().stream().collect(Collectors.joining(Setting.DELIM)));
 	// Colors
 	private final JComboBox<String> colourBox = new JComboBox<>(COLORS);
-	private final JButton colorFgButton = new FlatStyle.Button(LBL_FOREGROUND);
-	private final JButton colorBgButton = new FlatStyle.Button(LBL_BACKGROUND);
-	private final JButton colorCpmFgButton = new FlatStyle.Button(LBL_FOREGROUND);
-	private final JButton colorCpmBgButton = new FlatStyle.Button(LBL_BACKGROUND);
-	private final JButton colorLocalFgButton = new FlatStyle.Button(LBL_FOREGROUND);
-	private final JButton colorLocalBgButton = new FlatStyle.Button(LBL_BACKGROUND);
 
 	private Font cbmFont = Setting.CBM_FONT.getFont();
 	private Font sysFont = Setting.SYS_FONT.getFont();
@@ -212,7 +205,6 @@ public class SettingsPanel extends JPanel {
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_GUI), new JScrollPane(drawGuiPanel()));
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_VICE), new JScrollPane(drawVicePanel()));
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_FILES), new JScrollPane(drawFilesPanel()));
-		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_COLORS), new JScrollPane(drawColorPanel()));
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_DATABASE), new JScrollPane(drawDatabasePanel()));
 
 		var pluginTabPane = new JTabbedPane();
@@ -368,14 +360,6 @@ public class SettingsPanel extends JPanel {
 		GuiHelper.addToGridBag(2, row, 0.5, 0.0, 1, gbc, panel, field2);
 	}
 
-	private String getWindowSizePosString() {
-		var splits = Setting.getWindow();
-		if (splits.length < 4) {
-			return "";
-		}
-		return String.format("%d:%d,%d:%d", splits[0], splits[1], splits[2], splits[3]);
-	}
-
 	/**
 	 * Setup panel with GUI settings
 	 *
@@ -452,14 +436,6 @@ public class SettingsPanel extends JPanel {
 			mainPanel.refreshLists();
 		});
 
-		var getWinSizeButton = new JButton(Utility.getMessage(Resources.DROID64_SETTINGS_WINDOWSIZE_FETCH));
-		getWinSizeButton.addActionListener(ae -> {
-			Dimension size = mainPanel.getParent().getSize();
-			Point location = mainPanel.getParent().getLocation();
-			String str = String.format("%d:%d,%d:%d", (int) size.getWidth(), (int) size.getHeight(),
-					(int) location.getX(), (int) location.getY());
-			winSizePosField.setText(str);
-		});
 		// system font
 		var sysFontField = new JTextField(OldParameter.getFontAsDisplayString(sysFont));
 		var sysBundledFont = new JCheckBox(Utility.EMPTY, sysFont == null);
@@ -547,10 +523,6 @@ public class SettingsPanel extends JPanel {
 		cbmFontFilePanel.add(cbmFontField, BorderLayout.CENTER);
 		cbmFontFilePanel.add(cbmFontPanelButtons, BorderLayout.EAST);
 
-		var winSizePanel = new JPanel(new BorderLayout());
-		winSizePanel.add(winSizePosField, BorderLayout.CENTER);
-		winSizePanel.add(getWinSizeButton, BorderLayout.EAST);
-
 		var fontSizePanel1 = new JPanel(new BorderLayout());
 		fontSizePanel1.add(fontSizeSpinner, BorderLayout.WEST);
 		fontSizePanel1.add(new JPanel(), BorderLayout.CENTER);
@@ -581,11 +553,10 @@ public class SettingsPanel extends JPanel {
 		addField(3, Resources.DROID64_SETTINGS_GRIDSPACING_LOCAL, imageRowHeightPanel, guiPanel, gbc);
 		addField(4, Resources.DROID64_SETTINGS_FONTSIZE_IMAGE, fontSizePanel1, guiPanel, gbc);
 		addField(5, Resources.DROID64_SETTINGS_FONTSIZE_LOCAL, fontSizePanel2, guiPanel, gbc);
-		addField(6, Resources.DROID64_SETTINGS_WINDOWSIZE, winSizePanel, guiPanel, gbc);
-		addField(7, Resources.DROID64_SETTINGS_SYSFONT, sysFontFilePanel, guiPanel, gbc);
-		addField(8, Resources.DROID64_SETTINGS_CBMFONT, cbmFontFilePanel, guiPanel, gbc);
-		addField(9, Resources.DROID64_SETTINGS_CONSOLEFONT, consoleFontFilePanel, guiPanel, gbc);
-		GuiHelper.addToGridBag(0, 10, 0.5, 0.8, 3, gbc, guiPanel, new JPanel());
+		addField(6, Resources.DROID64_SETTINGS_SYSFONT, sysFontFilePanel, guiPanel, gbc);
+		addField(7, Resources.DROID64_SETTINGS_CBMFONT, cbmFontFilePanel, guiPanel, gbc);
+		addField(8, Resources.DROID64_SETTINGS_CONSOLEFONT, consoleFontFilePanel, guiPanel, gbc);
+		addColorSection(guiPanel, gbc, 9);
 		return guiPanel;
 	}
 
@@ -600,7 +571,6 @@ public class SettingsPanel extends JPanel {
 		Setting.REMEMBER_WINDOW.set(rememberWindowCheckBox.isSelected());
 		Setting.BOOKMARK_BAR.set(bookmarkBarCheckBox.isSelected());
 		Setting.HIDECONSOLE.set(hideConsoleCheckBox.isSelected());
-		Setting.COLOUR.set(colourBox.getSelectedIndex());
 		Setting.ROW_HEIGHT.set(Integer.parseInt(rowHeightSpinner.getValue().toString()));
 		Setting.LOOK_AND_FEEL.set(Optional.ofNullable(lookAndFeelBox.getSelectedItem())
 				.map(UIManager.LookAndFeelInfo.class::cast)
@@ -614,17 +584,10 @@ public class SettingsPanel extends JPanel {
 		Setting.JDBC_PASS.set(String.valueOf(jdbcPassword.getPassword()));
 		Setting.JDBC_LIMIT_TYPE.set(limitTypeBox.getSelectedIndex());
 		Setting.EXCLUDED_IMAGE_FILES.set(excludeImageFiles.getText());
-		Setting.WINDOW.set(winSizePosField.getText());
 		Setting.SYS_FONT.set(sysFont);
 		Setting.CBM_FONT.set(cbmFont);
 		Setting.CONSOLE_FONT.set(consoleFont);
 
-		Setting.DIR_BG.set(colorBgButton.getBackground());
-		Setting.DIR_FG.set(colorFgButton.getForeground());
-		Setting.DIR_CPM_BG.set(colorCpmBgButton.getBackground());
-		Setting.DIR_CPM_FG.set(colorCpmFgButton.getForeground());
-		Setting.DIR_LOCAL_BG.set(colorLocalBgButton.getBackground());
-		Setting.DIR_LOCAL_FG.set(colorLocalFgButton.getForeground());
 
 		Setting.EXT_REMOVAL.set(extRemoval.getText());
 		Setting.FILE_EXT_D64.set(fileExtD64.getText());
@@ -662,101 +625,129 @@ public class SettingsPanel extends JPanel {
 		}
 	}
 
-	private void setupColorButton(final Setting fgSetting, final Setting bgSetting, final JButton fgButton,
-			final JButton bgButton) {
-		fgButton.setForeground(fgSetting.getColor());
-		fgButton.setBackground(bgSetting.getColor());
-		bgButton.setForeground(fgSetting.getColor());
-		bgButton.setBackground(bgSetting.getColor());
+	/** Colour swatch that is an ordinary button of the current look and feel, with the colour as its icon. */
+	private static final class SwatchButton extends JButton {
+		private static final long serialVersionUID = 1L;
+		private Color color;
 
-		fgButton.addActionListener(event -> {
-			var c = JColorChooser.showDialog(fgButton, LBL_FOREGROUND, fgButton.getForeground());
-			fgButton.setForeground(c);
-			bgButton.setForeground(c);
+		SwatchButton(String text, Color color) {
+			super(text);
+			setColor(color);
+		}
+
+		Color getColor() {
+			return color;
+		}
+
+		void setColor(Color c) {
+			this.color = c;
+			setIcon(new javax.swing.Icon() {
+				@Override
+				public void paintIcon(Component comp, java.awt.Graphics g, int x, int y) {
+					g.setColor(color);
+					g.fillRect(x, y, getIconWidth(), getIconHeight());
+					g.setColor(Color.DARK_GRAY);
+					g.drawRect(x, y, getIconWidth() - 1, getIconHeight() - 1);
+				}
+
+				@Override
+				public int getIconWidth() {
+					return 26;
+				}
+
+				@Override
+				public int getIconHeight() {
+					return 14;
+				}
+			});
+			repaint();
+		}
+	}
+
+	private final java.util.List<Runnable> colorSwatchRefreshers = new java.util.ArrayList<>();
+
+	/** A swatch that changes the setting at once when a colour is chosen. */
+	private SwatchButton swatch(String text, Setting setting) {
+		var b = new SwatchButton(text, setting.getColor());
+		b.setHorizontalAlignment(javax.swing.SwingConstants.LEADING);
+		b.addActionListener(ae -> {
+			var c = JColorChooser.showDialog(b, text, b.getColor());
+			if (c != null) {
+				b.setColor(c);
+				setting.set(c);
+				mainPanel.refreshLists();
+			}
 		});
-		bgButton.addActionListener(event -> {
-			var c = JColorChooser.showDialog(bgButton, LBL_BACKGROUND, bgButton.getBackground());
-			fgButton.setBackground(c);
-			bgButton.setBackground(c);
-		});
+		colorSwatchRefreshers.add(() -> b.setColor(setting.getColor()));
+		return b;
+	}
+
+	private void addColorPair(int row, String label, Setting fg, Setting bg, JPanel panel, GridBagConstraints gbc) {
+		addColorPair(row, label, LBL_FOREGROUND, fg, LBL_BACKGROUND, bg, panel, gbc);
+	}
+
+	private void addColorPair(int row, String label, String text1, Setting s1, String text2, Setting s2, JPanel panel,
+			GridBagConstraints gbc) {
+		var pair = new JPanel(new java.awt.GridLayout(1, 2, 6, 0));
+		pair.add(swatch(text1, s1));
+		pair.add(swatch(text2, s2));
+		GuiHelper.addToGridBag(0, row, 0.0, 0.0, 1, gbc, panel, new JLabel(label));
+		GuiHelper.addToGridBag(1, row, 1.0, 0.0, 1, gbc, panel, pair);
+		GuiHelper.addToGridBag(2, row, 0.0, 0.0, 1, gbc, panel, new JPanel());
 	}
 
 	/**
-	 * Setup Color settings
-	 *
-	 * @return JPanel
+	 * Colour settings below the look and feel settings. Every change is applied at once.
+	 * @return the next free row
 	 */
-	private JPanel drawColorPanel() {
+	private int addColorSection(JPanel panel, GridBagConstraints gbc, int startRow) {
+		int row = startRow;
+		colorSwatchRefreshers.clear();
+		GuiHelper.addToGridBag(0, row++, 1.0, 0.0, 3, gbc, panel, new javax.swing.JSeparator());
+		var heading = new JLabel(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_COLORS));
+		heading.setFont(heading.getFont().deriveFont(Font.BOLD));
+		GuiHelper.addToGridBag(0, row++, 1.0, 0.0, 3, gbc, panel, heading);
 
 		colourBox.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_SCHEME_TOOLTIP));
 		colourBox.setEditable(false);
 		colourBox.setSelectedIndex(Setting.COLOUR.getInteger() < COLORS.length ? Setting.COLOUR.getInteger() : 0);
-
-		setupColorButton(Setting.DIR_FG, Setting.DIR_BG, colorFgButton, colorBgButton);
-		setupColorButton(Setting.DIR_CPM_FG, Setting.DIR_CPM_BG, colorCpmFgButton, colorCpmBgButton);
-		setupColorButton(Setting.DIR_LOCAL_FG, Setting.DIR_LOCAL_BG, colorLocalFgButton, colorLocalBgButton);
-
-		var colorActiveBorderButton = FlatStyle.Button.withBorder(Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_ACTIVE));
-		colorActiveBorderButton.setBorder(BorderFactory.createLineBorder(Setting.BORDER_ACTIVE.getColor(), 3));
-		colorActiveBorderButton.addActionListener(ae -> {
-			var c = JColorChooser.showDialog(colorActiveBorderButton, LBL_FOREGROUND, Setting.BORDER_ACTIVE.getColor());
-			colorActiveBorderButton.setBorder(BorderFactory.createLineBorder(c));
-			Setting.BORDER_ACTIVE.set(c);
+		colourBox.addActionListener(ae -> {
+			Setting.COLOUR.set(colourBox.getSelectedIndex());
+			mainPanel.applyLookAndFeel();
+			SwingUtilities.updateComponentTreeUI(this);
 		});
-		var colorInactiveBorderButton = FlatStyle.Button.withBorder(Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_INACTIVE));
-		colorInactiveBorderButton.setBorder(BorderFactory.createLineBorder(Setting.BORDER_INACTIVE.getColor(), 3));
-		colorInactiveBorderButton.addActionListener(ae -> {
-			var c = JColorChooser.showDialog(colorInactiveBorderButton, LBL_BACKGROUND,
-					Setting.BORDER_INACTIVE.getColor());
-			colorInactiveBorderButton.setBorder(BorderFactory.createLineBorder(c));
-			Setting.BORDER_INACTIVE.set(c);
-		});
+		addField(row++, Resources.DROID64_SETTINGS_COLOR_THEME, colourBox, panel, gbc);
+
+		addColorPair(row++, Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_CBM) + " (C64)", Setting.DIR_FG, Setting.DIR_BG, panel, gbc);
+		for (var m : new Object[][] {
+				{ "Commodore 128 (40)", Setting.MACHINE_C128_FG, Setting.MACHINE_C128_BG },
+				{ "Commodore 128 (80)", Setting.MACHINE_C128VDC_FG, Setting.MACHINE_C128VDC_BG },
+				{ "VIC-20", Setting.MACHINE_VIC20_FG, Setting.MACHINE_VIC20_BG },
+				{ "Plus/4, C16", Setting.MACHINE_PLUS4_FG, Setting.MACHINE_PLUS4_BG },
+				{ "PET / CBM", Setting.MACHINE_PET_FG, Setting.MACHINE_PET_BG } }) {
+			addColorPair(row++, (String) m[0], (Setting) m[1], (Setting) m[2], panel, gbc);
+		}
+		addColorPair(row++, Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_CPM), Setting.DIR_CPM_FG, Setting.DIR_CPM_BG, panel, gbc);
+		addColorPair(row++, Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_LOCAL), Setting.DIR_LOCAL_FG, Setting.DIR_LOCAL_BG, panel, gbc);
+		addColorPair(row++, Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_BORDER),
+				Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_ACTIVE), Setting.BORDER_ACTIVE,
+				Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_INACTIVE), Setting.BORDER_INACTIVE, panel, gbc);
 
 		var colorResetButton = new JButton(Utility.getMessage(Resources.DROID64_SETTINGS_COLOR_RESET));
-		colorResetButton.addActionListener(ae -> resetButtonColors(colorActiveBorderButton, colorInactiveBorderButton));
-
-		var colorPanel = new JPanel(new GridBagLayout());
-		var gbc = new GridBagConstraints();
-		gbc.fill = GridBagConstraints.HORIZONTAL;
-
-		addFields(0, Resources.DROID64_SETTINGS_COLOR_THEME, colourBox, new JPanel(), colorPanel, gbc);
-		addFields(1, Utility.EMPTY, colorResetButton, new JPanel(), colorPanel, gbc);
-		addFields(2, Resources.DROID64_SETTINGS_COLOR_CBM, colorFgButton, colorBgButton, colorPanel, gbc);
-		addFields(3, Resources.DROID64_SETTINGS_COLOR_CPM, colorCpmFgButton, colorCpmBgButton, colorPanel, gbc);
-		addFields(4, Resources.DROID64_SETTINGS_COLOR_LOCAL, colorLocalFgButton, colorLocalBgButton, colorPanel, gbc);
-		addFields(5, Resources.DROID64_SETTINGS_COLOR_BORDER, colorActiveBorderButton, colorInactiveBorderButton,
-				colorPanel, gbc);
-
-		GuiHelper.addToGridBag(0, 6, 0.5, 0.8, 3, gbc, colorPanel, new JPanel());
-		return colorPanel;
-	}
-
-	private void resetButtonColors(JButton colorActiveBorder, JButton colorInactiveBorder) {
-
-		Setting.DIR_BG.reset();
-		Setting.DIR_FG.reset();
-		Setting.DIR_LOCAL_BG.reset();
-		Setting.DIR_LOCAL_FG.reset();
-		Setting.DIR_CPM_FG.reset();
-		Setting.DIR_CPM_FG.reset();
-		Setting.BORDER_ACTIVE.reset();
-		Setting.BORDER_INACTIVE.reset();
-
-		colorFgButton.setForeground(Setting.DIR_FG.getColor());
-		colorFgButton.setBackground(Setting.DIR_BG.getColor());
-		colorBgButton.setForeground(Setting.DIR_FG.getColor());
-		colorBgButton.setBackground(Setting.DIR_BG.getColor());
-		colorLocalFgButton.setForeground(Setting.DIR_LOCAL_FG.getColor());
-		colorLocalFgButton.setBackground(Setting.DIR_LOCAL_BG.getColor());
-		colorLocalBgButton.setForeground(Setting.DIR_LOCAL_FG.getColor());
-		colorLocalBgButton.setBackground(Setting.DIR_LOCAL_BG.getColor());
-		colorCpmFgButton.setForeground(Setting.DIR_CPM_FG.getColor());
-		colorCpmFgButton.setBackground(Setting.DIR_CPM_BG.getColor());
-		colorCpmBgButton.setForeground(Setting.DIR_CPM_FG.getColor());
-		colorCpmBgButton.setBackground(Setting.DIR_CPM_BG.getColor());
-
-		colorActiveBorder.setBorder(BorderFactory.createLineBorder(Setting.BORDER_ACTIVE.getColor()));
-		colorInactiveBorder.setBorder(BorderFactory.createLineBorder(Setting.BORDER_INACTIVE.getColor()));
+		colorResetButton.addActionListener(ae -> {
+			for (var st : new Setting[] { Setting.DIR_BG, Setting.DIR_FG, Setting.DIR_LOCAL_BG, Setting.DIR_LOCAL_FG,
+					Setting.DIR_CPM_BG, Setting.DIR_CPM_FG, Setting.BORDER_ACTIVE, Setting.BORDER_INACTIVE,
+					Setting.MACHINE_C128_BG, Setting.MACHINE_C128_FG, Setting.MACHINE_C128VDC_BG, Setting.MACHINE_C128VDC_FG,
+					Setting.MACHINE_VIC20_BG, Setting.MACHINE_VIC20_FG, Setting.MACHINE_PLUS4_BG, Setting.MACHINE_PLUS4_FG,
+					Setting.MACHINE_PET_BG, Setting.MACHINE_PET_FG }) {
+				st.reset();
+			}
+			colorSwatchRefreshers.forEach(Runnable::run);
+			mainPanel.refreshLists();
+		});
+		GuiHelper.addToGridBag(1, row++, 0.0, 0.0, 1, gbc, panel, colorResetButton);
+		GuiHelper.addToGridBag(0, row, 0.5, 0.8, 3, gbc, panel, new JPanel());
+		return row + 1;
 	}
 
 	/**

@@ -659,14 +659,14 @@ public final class HexEditorDialog extends JDialog {
 		/** Plain: the colours of the hex view. Computer: the screen colours of the selected computer. */
 		void applyPalette() {
 			if (computerColours) {
-				bgColor = machine.background;
-				fgColor = machine.foreground;
+				bgColor = machine.background();
+				fgColor = machine.foreground();
 				gridColor = machine.mix(0.35);
 				headColor = machine.mix(0.15);
 				selColor = machine.mix(0.5);
 				changedColor = machine.mix(0.25);
 				prgColor = machine.mix(0.7);
-				cursorColor = machine.foreground;
+				cursorColor = machine.foreground();
 				otherColor = machine.mix(0.7);
 			} else {
 				bgColor = Color.WHITE;

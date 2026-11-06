@@ -826,8 +826,8 @@ public class DirArtEditorDialog extends JDialog {
 			var machine = (C64.Machine) machineBox.getSelectedItem();
 			drawMachine = machine;
 			drawLower = charsetBox.getSelectedIndex() == 1;
-			var bg = machine.background;
-			var fg = machine.foreground;
+			var bg = machine.background();
+			var fg = machine.foreground();
 			var headBg = machine.mix(0.18);
 			g.setColor(bg);
 			g.fillRect(0, 0, getWidth(), getHeight());
@@ -906,8 +906,8 @@ public class DirArtEditorDialog extends JDialog {
 			var machine = (C64.Machine) machineBox.getSelectedItem();
 			drawMachine = machine;
 			drawLower = charsetBox.getSelectedIndex() == 1;
-			var bg = machine.background;
-			var fg = machine.foreground;
+			var bg = machine.background();
+			var fg = machine.foreground();
 			g.setColor(Color.DARK_GRAY);
 			g.fillRect(0, 0, getWidth(), getHeight());
 			for (int i = 0; i < 256; i++) {

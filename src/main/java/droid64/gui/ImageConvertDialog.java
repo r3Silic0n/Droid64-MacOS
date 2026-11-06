@@ -153,8 +153,8 @@ public class ImageConvertDialog extends JDialog {
 		var bg = Setting.DIR_BG.getColor();
 		var fg = Setting.DIR_FG.getColor();
 		if (machine != null && machine != C64.Machine.C64) {
-			bg = machine.background;
-			fg = machine.foreground;
+			bg = machine.background();
+			fg = machine.foreground();
 		}
 		var cbmFont = Setting.CBM_FONT.getFont();
 		if (cbmFont != null && Setting.FONT_SIZE.getInteger() != null) {

@@ -29,27 +29,46 @@ final class C64 {
 	enum Machine {
 		/** Power-on colours: C64 blue / light blue, C128 dark grey / light green, VDC black / cyan, VIC-20 white / blue, Plus/4 white / black, PET black / green. */
 		C64("Commodore 64", 0, PALETTE[BLUE], PALETTE[LIGHT_BLUE]),
-		C128("Commodore 128 (40 columns)", 1, PALETTE[11], PALETTE[13]),
-		C128_VDC("Commodore 128 (80 columns)", 1, new Color(0x000000), new Color(0x55FFFF)),
-		VIC20("VIC-20", 2, new Color(0xFFFFFF), new Color(0x6532F3)),
-		PLUS4("Plus/4, C16, C116", 3, new Color(0xFFFFFF), new Color(0x000000)),
-		PET("PET / CBM", 4, new Color(0x000000), new Color(0x41FF00));
+		C128("Commodore 128 (40 columns)", 1, PALETTE[11], PALETTE[13], Setting.MACHINE_C128_BG, Setting.MACHINE_C128_FG),
+		C128_VDC("Commodore 128 (80 columns)", 1, new Color(0x000000), new Color(0x55FFFF), Setting.MACHINE_C128VDC_BG, Setting.MACHINE_C128VDC_FG),
+		VIC20("VIC-20", 2, new Color(0xFFFFFF), new Color(0x6532F3), Setting.MACHINE_VIC20_BG, Setting.MACHINE_VIC20_FG),
+		PLUS4("Plus/4, C16, C116", 3, new Color(0xFFFFFF), new Color(0x000000), Setting.MACHINE_PLUS4_BG, Setting.MACHINE_PLUS4_FG),
+		PET("PET / CBM", 4, new Color(0x000000), new Color(0x41FF00), Setting.MACHINE_PET_BG, Setting.MACHINE_PET_FG);
 
 		final String label;
 		/** Index of the character ROM in chargens.bin. */
 		final int rom;
-		final Color background;
-		final Color foreground;
+		private final Color defaultBackground;
+		private final Color defaultForeground;
+		/** Settings that hold the screen colours of the machine (null: the fixed C64 colours). */
+		private final Setting bgSetting;
+		private final Setting fgSetting;
 
 		Machine(String label, int rom, Color background, Color foreground) {
+			this(label, rom, background, foreground, null, null);
+		}
+
+		Machine(String label, int rom, Color background, Color foreground, Setting bgSetting, Setting fgSetting) {
 			this.label = label;
 			this.rom = rom;
-			this.background = background;
-			this.foreground = foreground;
+			this.defaultBackground = background;
+			this.defaultForeground = foreground;
+			this.bgSetting = bgSetting;
+			this.fgSetting = fgSetting;
+		}
+
+		Color background() {
+			return bgSetting != null ? bgSetting.getColor() : defaultBackground;
+		}
+
+		Color foreground() {
+			return fgSetting != null ? fgSetting.getColor() : defaultForeground;
 		}
 
 		/** A colour between background and foreground, 0 = background, 1 = foreground. */
 		Color mix(double amount) {
+			var background = background();
+			var foreground = foreground();
 			int r = (int) Math.round(background.getRed() + (foreground.getRed() - background.getRed()) * amount);
 			int g = (int) Math.round(background.getGreen() + (foreground.getGreen() - background.getGreen()) * amount);
 			int b = (int) Math.round(background.getBlue() + (foreground.getBlue() - background.getBlue()) * amount);

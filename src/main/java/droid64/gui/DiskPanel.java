@@ -1783,8 +1783,8 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			var baseBg = Setting.DIR_BG.getColor();
 			var baseFg = Setting.DIR_FG.getColor();
 			if (imageLoaded && diskMachine != null && diskMachine != C64.Machine.C64) {
-				baseBg = diskMachine.background;
-				baseFg = diskMachine.foreground;
+				baseBg = diskMachine.background();
+				baseFg = diskMachine.foreground();
 			}
 			colorBg = active ? baseBg : baseBg.darker();
 			colorFg = active ? baseFg : baseFg.darker();
@@ -1832,6 +1832,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 	/** Apply changed font size / row height settings immediately. */
 	public void refreshLayout() {
+		setBackground(active ? Setting.BORDER_ACTIVE.getColor() : Setting.BORDER_INACTIVE.getColor());
 		table.setColumnModel(tableModel.getTableColumnModel());
 		table.setAutoCreateColumnsFromModel(false);
 		table.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
