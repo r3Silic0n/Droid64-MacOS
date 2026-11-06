@@ -34,7 +34,10 @@ public class ImageConvertDialog extends JDialog {
 	private final JComboBox<DiskImageType> targetBox;
 	private final JTextField fileField = new JTextField(34);
 	private final JCheckBox keepFlags = new JCheckBox("Keep the locked / closed flags", true);
-	private final JCheckBox openAfter = new JCheckBox("Open the new image in the list", true);
+	private final JCheckBox openAfter = new JCheckBox("Open the new image in the", true);
+	private final javax.swing.JComboBox<String> openSide = new javax.swing.JComboBox<>(new String[] { "left list", "right list" });
+	private transient DiskPanel leftPanel;
+	private transient DiskPanel rightPanel;
 	private final JProgressBar bar = new JProgressBar(0, 100);
 	private final JLabel capacity = new JLabel(" ");
 	private final JButton convertButton = new JButton("Convert");
@@ -115,7 +118,11 @@ public class ImageConvertDialog extends JDialog {
 		gc.gridwidth = 2;
 		top.add(keepFlags, gc);
 		gc.gridy = 4;
-		top.add(openAfter, gc);
+		var openRow = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 0));
+		openRow.add(openAfter);
+		openRow.add(openSide);
+		openAfter.addActionListener(e -> openSide.setEnabled(openAfter.isSelected()));
+		top.add(openRow, gc);
 		gc.gridx = 0;
 		gc.gridy = 5;
 		gc.gridwidth = 1;
@@ -278,12 +285,16 @@ public class ImageConvertDialog extends JDialog {
 		JOptionPane.showMessageDialog(this, text.toString(), "Image convert",
 				result.problems.isEmpty() ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
 		dispose();
-		if (openAfter.isSelected() && panel != null) {
-			panel.openDiskImage(dest, true);
+		var target = openSide.getSelectedIndex() == 0 ? leftPanel : rightPanel;
+		if (target == null) {
+			target = panel;
+		}
+		if (openAfter.isSelected() && target != null) {
+			target.openDiskImage(dest, true);
 		}
 	}
 
-	public static void show(java.awt.Frame owner, DiskPanel panel) {
+	public static void show(java.awt.Frame owner, DiskPanel panel, DiskPanel left, DiskPanel right) {
 		var image = panel != null ? panel.getDiskImage() : null;
 		if (image == null || !panel.isImageLoaded()) {
 			JOptionPane.showMessageDialog(owner, "Load a D64, D71 or D81 disk image in the active list first.", "Image convert",
@@ -296,6 +307,11 @@ public class ImageConvertDialog extends JDialog {
 			JOptionPane.showMessageDialog(owner, "This kind of image cannot be converted.", "Image convert", JOptionPane.INFORMATION_MESSAGE);
 			return;
 		}
-		new ImageConvertDialog(owner, panel, image).setVisible(true);
+		var dlg = new ImageConvertDialog(owner, panel, image);
+		dlg.leftPanel = left;
+		dlg.rightPanel = right;
+		// default: the list the image was NOT converted from
+		dlg.openSide.setSelectedIndex(panel == left ? 1 : 0);
+		dlg.setVisible(true);
 	}
 }

@@ -674,7 +674,7 @@ public class MainPanel implements Serializable {
 				}
 			}
 		});
-		createButton(ActionButton.IMAGE_CONVERT_BUTTON, event -> ImageConvertDialog.show(parent, getActiveDiskPanel()));
+		createButton(ActionButton.IMAGE_CONVERT_BUTTON, event -> ImageConvertDialog.show(parent, getActiveDiskPanel(), diskPanel1, diskPanel2));
 		createButton(ActionButton.DIR_ART_BUTTON, event -> {
 			var diskPanel = getActiveDiskPanel();
 			DirArtEditorDialog.show(parent, diskPanel, diskPanel != null ? diskPanel.getDiskImage() : null);
