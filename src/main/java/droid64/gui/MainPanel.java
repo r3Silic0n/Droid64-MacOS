@@ -319,7 +319,6 @@ public class MainPanel implements Serializable {
 
 	private JToggleButton createToggleButton(ActionButton buttonKey, ActionListener listener) {
 		var button = new FlatStyle.ToggleButton(Utility.getMessage(buttonKey.getLabel() + ".label"));
-		button.setMnemonic(buttonKey.getMnemonic());
 		button.setToolTipText(Utility.getMessage(buttonKey.getLabel() + ".tooltip"));
 		button.setMargin(BUTTON_MARGINS);
 		button.addActionListener(listener);
@@ -331,7 +330,6 @@ public class MainPanel implements Serializable {
 	private JButton createButton(String label, ActionButton buttonKey, String toolTip, ActionListener listener) {
 		var button = new FlatStyle.Button(label);
 		if (buttonKey!=null) {
-			button.setMnemonic(buttonKey.getMnemonic());
 			setButtonColor(button, buttonKey);
 			buttonMap.put(buttonKey, button);
 		}
@@ -343,7 +341,6 @@ public class MainPanel implements Serializable {
 
 	private JButton createButton(ActionButton buttonKey, ActionListener listener) {
 		var button = new FlatStyle.Button(Utility.getMessage(buttonKey.getLabel() + ".label"));
-		button.setMnemonic(buttonKey.getMnemonic());
 		button.setToolTipText(Utility.getMessage(buttonKey.getLabel()  + ".tooltip"));
 		button.setMargin(BUTTON_MARGINS);
 		button.addActionListener(listener);
