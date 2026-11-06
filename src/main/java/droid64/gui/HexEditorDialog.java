@@ -168,7 +168,7 @@ public final class HexEditorDialog extends JDialog {
 		getContentPane().add(scroll, BorderLayout.CENTER);
 		getContentPane().add(status, BorderLayout.SOUTH);
 		installKeys();
-		setSize(canvas.getPreferredSize().width + 40, 620);
+		setSize(Math.max(canvas.getPreferredSize().width + 40, 1120), 620);
 		setLocationRelativeTo(mainPanel.getParent());
 		updateStatus();
 		canvas.requestFocusInWindow();
@@ -620,8 +620,8 @@ public final class HexEditorDialog extends JDialog {
 		private static final long serialVersionUID = 1L;
 		private final Font font = new Font(Font.MONOSPACED, Font.PLAIN, 14);
 		private final FontMetrics fm = getFontMetrics(font);
-		private final int cw = fm.charWidth('0');
-		private final int lh = fm.getHeight() + 2;
+		private final int cw = 10;
+		private final int lh = 18;
 		private static final int PAD = 8;
 
 		Canvas() {
@@ -756,11 +756,10 @@ public final class HexEditorDialog extends JDialog {
 			for (int row = firstRow; row <= lastRow; row++) {
 				int y = PAD + row * lh;
 				int base = row * PER_ROW;
-				g.setColor(addrColor);
-				g.drawString(String.format("%0" + addrWidth() + "X", base), offX(), y + fm.getAscent() + 1);
+				glyphs(g, String.format("%0" + addrWidth() + "X", base), offX(), y, addrColor, machine.background);
 				if (prg && base + PER_ROW > 2) {
 					int addr = loadAddress() + Math.max(base, 2) - 2;
-					g.drawString(base >= 2 ? String.format("$%04X", addr & 0xffff) : "", memX(), y + fm.getAscent() + 1);
+					glyphs(g, base >= 2 ? String.format("$%04X", addr & 0xffff) : "", memX(), y, addrColor, machine.background);
 				}
 				for (int col = 0; col < PER_ROW; col++) {
 					int i = base + col;
@@ -778,9 +777,9 @@ public final class HexEditorDialog extends JDialog {
 						continue;
 					}
 					int v = data[i] & 0xff;
-					g.setColor(prg && i < 2 ? machine.mix(0.6) : fg);
-					g.drawString(String.format("%02X", v), hexCol(col), y + fm.getAscent() + 1);
-					drawChar(g, v, tr, sel ? selColor : diff ? changedColor : machine.background, fg);
+					var cellBg = sel ? selColor : diff ? changedColor : machine.background;
+					glyphs(g, String.format("%02X", v), hexCol(col), y, prg && i < 2 ? machine.mix(0.6) : fg, cellBg);
+					drawChar(g, v, tr, cellBg, fg);
 				}
 			}
 			// cursor
@@ -800,6 +799,20 @@ public final class HexEditorDialog extends JDialog {
 				g.drawRect(other.x, other.y + lh - 3, other.width, 1);
 			}
 			g.dispose();
+		}
+
+		/** Draw text with the character ROM of the computer. */
+		private void glyphs(Graphics2D g, String text, int x, int y, Color color, Color bg) {
+			for (int i = 0; i < text.length(); i++) {
+				int pet = C64.asciiToPetscii(text.charAt(i));
+				if (text.charAt(i) == '$') {
+					pet = 0x24;
+				}
+				if (pet < 0) {
+					continue;
+				}
+				C64.drawPetscii(g, pet, x + i * cw, y + 1, cw, lh - 2, color, bg, machine, false);
+			}
 		}
 
 		private void drawChar(Graphics2D g, int v, Rectangle r, Color bg, Color fg) {
