@@ -48,7 +48,7 @@ public class DirArtEditorDialog extends JDialog {
 	private final transient DiskImage image;
 	private final List<DirArtWriter.Row> rows = new ArrayList<>();
 	private final byte[] header = new byte[DirArtWriter.NAME_LENGTH];
-	private final JTextField idField = new JTextField("00", 2);
+	private final JTextField idField = new JTextField("00", 5);
 	private final JSpinner rowCount;
 	private final JComboBox<DirArtWriter.Mode> modeBox = new JComboBox<>(DirArtWriter.Mode.values());
 	private final JCheckBox writeHeader = new JCheckBox("Also write disk name and ID", true);
