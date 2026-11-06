@@ -1155,7 +1155,11 @@ public class MainPanel implements Serializable {
 			.findFirst()
 			.map(a->a.getClassName()).ifPresent(plaf->{
 				try {
+					// drop the colours put over the previous look and feel, they would stay on the new one
+					colorHashMap.keySet().forEach(k -> UIManager.put(k, null));
 					UIManager.setLookAndFeel(plaf);
+					// the default colours belong to the look and feel; take those of the new one, not those of the first
+					saveDefaultValues();
 				} catch (InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException | ClassNotFoundException e) {
 					appendConsole("Look and feel failed: "+e);
 				}
