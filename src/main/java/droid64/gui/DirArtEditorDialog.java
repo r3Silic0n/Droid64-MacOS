@@ -70,6 +70,8 @@ public class DirArtEditorDialog extends JDialog {
 	private int curRow = 0;
 	private int curCol = 0;
 	private boolean updating = false;
+	/** The art (disk name, ID and lines) as it was when the editor was opened or last kept. */
+	private String savedContent = "";
 
 	public DirArtEditorDialog(java.awt.Frame owner, DiskPanel panel, DiskImage image) {
 		super(owner, "DIR art editor", false);
@@ -103,6 +105,8 @@ public class DirArtEditorDialog extends JDialog {
 				// keep the empty header
 			}
 		}
+		loadSavedArt();
+		savedContent = artContent();
 		var importBtn = new JButton("Read from disk");
 		var clearBtn = new JButton("Clear all");
 		var fillBtn = new JButton("Fill line");
@@ -180,7 +184,14 @@ public class DirArtEditorDialog extends JDialog {
 			canvas.repaint();
 		});
 		writeBtn.addActionListener(e -> writeToDisk());
-		close.addActionListener(e -> dispose());
+		close.addActionListener(e -> requestClose());
+		setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+		addWindowListener(new java.awt.event.WindowAdapter() {
+			@Override
+			public void windowClosing(java.awt.event.WindowEvent e) {
+				requestClose();
+			}
+		});
 
 		if (image != null && DirArtWriter.isSupported(image)) {
 			modeBox.setSelectedItem(DirArtWriter.Mode.APPEND);
@@ -333,6 +344,147 @@ public class DirArtEditorDialog extends JDialog {
 		} catch (CbmException e) {
 			JOptionPane.showMessageDialog(this, e.getMessage(), "DIR art", JOptionPane.ERROR_MESSAGE);
 		}
+	}
+
+	// ------------------------------------------------------------------ the art is kept for the next time
+
+	private static java.io.File artFile() {
+		return new java.io.File(System.getProperty("user.home"), ".droiD64-dirart.txt");
+	}
+
+	private static String hex(byte[] b) {
+		var sb = new StringBuilder();
+		for (byte v : b) {
+			sb.append(String.format("%02x", v & 0xff));
+		}
+		return sb.toString();
+	}
+
+	private static byte[] unhex(String s, int length) {
+		if (s == null || s.length() != length * 2) {
+			return null;
+		}
+		var b = new byte[length];
+		for (int i = 0; i < length; i++) {
+			b[i] = (byte) Integer.parseInt(s.substring(i * 2, i * 2 + 2), 16);
+		}
+		return b;
+	}
+
+	/** Disk name, ID and all lines as text: used to find out if anything was changed. */
+	private String artContent() {
+		var sb = new StringBuilder();
+		sb.append("header=").append(hex(header)).append('\n');
+		sb.append("id=").append(hex(new String(diskIdChars).getBytes(java.nio.charset.StandardCharsets.ISO_8859_1))).append('\n');
+		for (var r : rows) {
+			sb.append("row=").append(hex(r.raw)).append('\n');
+		}
+		return sb.toString();
+	}
+
+	private void saveArt() {
+		try {
+			var text = artContent() + "machine=" + machineBox.getSelectedIndex() + "\ncharset=" + charsetBox.getSelectedIndex() + "\n";
+			java.nio.file.Files.write(artFile().toPath(), text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			savedContent = artContent();
+		} catch (java.io.IOException e) {
+			JOptionPane.showMessageDialog(this, "The DIR art could not be kept: " + e.getMessage(), "DIR art", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+
+	/** Restore the art kept the last time. The disk name and ID of a loaded disk image are not replaced. */
+	private void loadSavedArt() {
+		var file = artFile();
+		if (!file.isFile()) {
+			return;
+		}
+		try {
+			byte[] savedHeader = null;
+			byte[] savedId = null;
+			var savedRows = new ArrayList<byte[]>();
+			int machine = -1;
+			int charset = -1;
+			for (var line : java.nio.file.Files.readAllLines(file.toPath(), java.nio.charset.StandardCharsets.UTF_8)) {
+				int eq = line.indexOf('=');
+				if (eq < 0) {
+					continue;
+				}
+				var key = line.substring(0, eq);
+				var value = line.substring(eq + 1).trim();
+				switch (key) {
+				case "header":
+					savedHeader = unhex(value, DirArtWriter.NAME_LENGTH);
+					break;
+				case "id":
+					savedId = unhex(value, diskIdChars.length);
+					break;
+				case "row": {
+					var r = unhex(value, 30);
+					if (r != null) {
+						savedRows.add(r);
+					}
+					break;
+				}
+				case "machine":
+					machine = Integer.parseInt(value);
+					break;
+				case "charset":
+					charset = Integer.parseInt(value);
+					break;
+				default:
+					break;
+				}
+			}
+			if (savedRows.isEmpty()) {
+				return;
+			}
+			boolean diskLoaded = image != null && DirArtWriter.isSupported(image);
+			int max = diskLoaded ? DirArtWriter.maxEntries(image) : 144;
+			rows.clear();
+			for (var raw : savedRows) {
+				if (rows.size() < max) {
+					var row = new DirArtWriter.Row();
+					System.arraycopy(raw, 0, row.raw, 0, 30);
+					rows.add(row);
+				}
+			}
+			if (!diskLoaded) {
+				if (savedHeader != null) {
+					System.arraycopy(savedHeader, 0, header, 0, header.length);
+				}
+				if (savedId != null) {
+					for (int i = 0; i < diskIdChars.length; i++) {
+						diskIdChars[i] = (char) (savedId[i] & 0xff);
+					}
+				}
+			}
+			updating = true;
+			rowCount.setValue(rows.size());
+			updating = false;
+			if (machine >= 0 && machine < machineBox.getItemCount()) {
+				machineBox.setSelectedIndex(machine);
+			}
+			if (charset >= 0 && charset < charsetBox.getItemCount()) {
+				charsetBox.setSelectedIndex(charset);
+			}
+		} catch (java.io.IOException | RuntimeException e) {
+			// a damaged file is ignored: the editor starts empty
+		}
+	}
+
+	/** Closing: ask only if the art was changed since it was opened or kept. */
+	private void requestClose() {
+		if (!artContent().equals(savedContent)) {
+			Object[] options = { "Keep it", "Discard", "Cancel" };
+			int answer = JOptionPane.showOptionDialog(this, "The DIR art was changed.\nKeep it for the next time the editor is opened?",
+					"DIR art", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+			if (answer == 0) {
+				saveArt();
+			} else if (answer != 1) {
+				return;
+			}
+		}
+		dispose();
 	}
 
 	/** The disk name in the header line as text, for a file name and a new disk. */
