@@ -52,6 +52,7 @@ public class HexViewPanel extends JPanel {
 	private static final long serialVersionUID = 1L;
 
 	private static final String ASM_MODE = Utility.getMessage(Resources.DROID64_HEXVIEW_ASMMODE);
+	private static final int MAX_BASIC_LINE = 48;
 	private static final String HEX_MODE = Utility.getMessage(Resources.DROID64_HEXVIEW_HEXMODE);
 	private final MainPanel mainPanel;
 	private final JButton modeButton = new JButton(HEX_MODE);
@@ -173,6 +174,10 @@ public class HexViewPanel extends JPanel {
 			return null;
 		}
 		var line = text.split("\n")[0].trim();
+		if (line.length() > MAX_BASIC_LINE) {
+			// a long first line (a Plus/4 program, or data that only looks like BASIC) must not make the window huge
+			line = line.substring(0, MAX_BASIC_LINE) + "\u2026";
+		}
 		return line.isEmpty() ? null : line;
 	}
 
