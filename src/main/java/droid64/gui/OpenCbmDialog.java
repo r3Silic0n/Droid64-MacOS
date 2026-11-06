@@ -308,6 +308,25 @@ public final class OpenCbmDialog extends JDialog {
 		return p;
 	}
 
+	/** Row of the option column beside the sector map: a small label above its control. */
+	private static void sideRow(JPanel p, int row, String label, Component c) {
+		var g = new GridBagConstraints();
+		g.gridx = 0;
+		g.gridy = row;
+		g.weightx = 1;
+		g.fill = GridBagConstraints.HORIZONTAL;
+		g.anchor = GridBagConstraints.NORTHWEST;
+		g.insets = new Insets(label != null ? 4 : 1, 0, 1, 0);
+		if (label != null) {
+			var box = new JPanel(new BorderLayout(0, 2));
+			box.add(new JLabel(label), BorderLayout.NORTH);
+			box.add(c, BorderLayout.CENTER);
+			p.add(box, g);
+		} else {
+			p.add(c, g);
+		}
+	}
+
 	private static void addRow(JPanel p, int row, String label, Component c) {
 		var gl = new GridBagConstraints();
 		gl.gridx = 0;
@@ -358,6 +377,8 @@ public final class OpenCbmDialog extends JDialog {
 		private static final Color C_SKIPPED = new Color(0x26, 0x2B, 0x33);
 		private static final Color C_CUR = new Color(0x5B, 0x9B, 0xFF);
 
+		private static final int PAD_L = 28;
+		private static final int PAD_T = 44;
 		private byte[][] state = new byte[0][];
 		private int tracks;
 		private int maxSpt;
@@ -372,8 +393,6 @@ public final class OpenCbmDialog extends JDialog {
 		SectorMap() {
 			setBackground(new Color(0x1B, 0x1F, 0x25));
 			setOpaque(true);
-			setPreferredSize(new Dimension(640, 330));
-			setMinimumSize(new Dimension(300, 200));
 			setGeometry("1541", false);
 		}
 
@@ -408,6 +427,19 @@ public final class OpenCbmDialog extends JDialog {
 			}
 			curTrack = 0;
 			curSector = 0;
+			sizeToGrid();
+		}
+
+		/** The map is only as large as its squares need. */
+		private void sizeToGrid() {
+			int pitch = Math.max(4, Math.min(16, 600 / Math.max(1, tracks)));
+			if (maxSpt > 0) {
+				pitch = Math.min(pitch, 16);
+			}
+			var d = new Dimension(PAD_L + tracks * pitch + 12, PAD_T + maxSpt * pitch + 10);
+			setPreferredSize(d);
+			setMinimumSize(d);
+			revalidate();
 			repaint();
 		}
 
@@ -568,15 +600,15 @@ public final class OpenCbmDialog extends JDialog {
 				g.drawString(names[i], lx + 15, 18);
 				lx += 15 + fm.stringWidth(names[i]) + 18;
 			}
-			int padL = 28;
-			int padT = 48;
+			int padL = PAD_L;
+			int padT = PAD_T;
 			int availW = getWidth() - padL - 12;
 			int availH = getHeight() - padT - 10;
 			if (tracks == 0 || maxSpt == 0 || availW < 10 || availH < 10) {
 				g.dispose();
 				return;
 			}
-			int pitch = Math.max(4, Math.min(18, Math.min(availW / tracks, availH / maxSpt)));
+			int pitch = Math.max(4, Math.min(16, Math.min(availW / tracks, availH / maxSpt)));
 			int cell = Math.max(3, pitch - 2);
 			int step = pitch >= 12 ? 5 : pitch >= 8 ? 10 : 20;
 			g.setColor(new Color(0x8C, 0x94, 0xA1));
@@ -660,11 +692,12 @@ public final class OpenCbmDialog extends JDialog {
 			this.toImage = toImage;
 			setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
-			var head = form();
-			head.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+			var side = new JPanel(new GridBagLayout());
 			var fileRow = new JPanel(new BorderLayout(6, 0));
 			fileRow.add(file, BorderLayout.CENTER);
-			var browse = new JButton("Browse…");
+			file.setColumns(14);
+			var browse = new JButton("\u2026");
+			browse.setToolTipText("Browse");
 			browse.addActionListener(e -> {
 				var f = chooseFile(toImage, toImage ? "Save disk image as" : "Disk image to write", toImage ? file.getText().isEmpty() ? "disk.d64" : new File(file.getText()).getName() : null);
 				if (f != null) {
@@ -672,26 +705,21 @@ public final class OpenCbmDialog extends JDialog {
 				}
 			});
 			fileRow.add(browse, BorderLayout.EAST);
-			addRow(head, 0, toImage ? "Save as" : "Image", fileRow);
-
-			var opts = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-			opts.add(new JLabel("Drive type"));
-			opts.add(driveType);
-			opts.add(new JLabel("Retries"));
-			opts.add(retries);
-			opts.add(extended);
-			opts.add(bamOnly);
+			sideRow(side, 0, toImage ? "Save as" : "Image", fileRow);
+			sideRow(side, 1, "Drive type", driveType);
+			sideRow(side, 2, "Retries", retries);
+			sideRow(side, 3, null, extended);
+			sideRow(side, 4, null, bamOnly);
 			if (toImage) {
-				opts.add(errorMap);
+				sideRow(side, 5, null, errorMap);
+				errorMap.setText("Keep error map in image");
 			}
-			addRow(head, 1, null, opts);
-
 			var buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
 			start.setText(toImage ? "Start copy" : "Write to disk");
 			buttons.add(start);
 			buttons.add(stop);
 			stop.setEnabled(false);
-			addRow(head, 2, null, buttons);
+			sideRow(side, 6, null, buttons);
 			driveType.addActionListener(e -> {
 				extended.setEnabled("1541".equals(driveType.getSelectedItem()));
 				map.setGeometry(String.valueOf(driveType.getSelectedItem()), extended.isSelected());
@@ -701,15 +729,33 @@ public final class OpenCbmDialog extends JDialog {
 			var south = new JPanel(new BorderLayout(0, 4));
 			var barRow = new JPanel(new BorderLayout(8, 0));
 			barRow.add(bar, BorderLayout.CENTER);
-			south.add(barRow, BorderLayout.NORTH);
-			south.add(stats, BorderLayout.CENTER);
-			var logScroll = new JScrollPane(log);
-			logScroll.setPreferredSize(new Dimension(100, 110));
-			south.add(logScroll, BorderLayout.SOUTH);
+			var barStats = new JPanel(new BorderLayout(0, 4));
+			barStats.add(barRow, BorderLayout.NORTH);
+			barStats.add(stats, BorderLayout.CENTER);
+			south.add(barStats, BorderLayout.NORTH);
+			south.add(new JScrollPane(log), BorderLayout.CENTER);
 
-			add(head, BorderLayout.NORTH);
-			add(map, BorderLayout.CENTER);
-			add(south, BorderLayout.SOUTH);
+			var top = new JPanel(new GridBagLayout());
+			var gm = new GridBagConstraints();
+			gm.gridx = 0;
+			gm.gridy = 0;
+			gm.anchor = GridBagConstraints.NORTHWEST;
+			top.add(map, gm);
+			var gs = new GridBagConstraints();
+			gs.gridx = 1;
+			gs.gridy = 0;
+			gs.weightx = 1;
+			gs.fill = GridBagConstraints.HORIZONTAL;
+			gs.anchor = GridBagConstraints.NORTHWEST;
+			gs.insets = new Insets(0, 16, 0, 0);
+			top.add(side, gs);
+			var gf = new GridBagConstraints();
+			gf.gridx = 2;
+			gf.gridy = 0;
+			gf.weightx = 0.001;
+			top.add(new JPanel(), gf);
+			add(top, BorderLayout.NORTH);
+			add(south, BorderLayout.CENTER);
 
 			start.addActionListener(e -> begin());
 			stop.addActionListener(e -> stopProcess());
