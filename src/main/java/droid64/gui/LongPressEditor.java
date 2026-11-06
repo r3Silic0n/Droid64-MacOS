@@ -46,6 +46,8 @@ final class LongPressEditor extends MouseAdapter {
 	private int pressRow = -1;
 	private int pressColumn = -1;
 	private JTextField editor;
+	private boolean edited;
+	private long started;
 
 	LongPressEditor(JTable table, IntPredicate editable, java.util.function.IntFunction<String> typeOf,
 			BiConsumer<Integer, String> renamer, BiConsumer<Integer, FileType> typeSetter) {
@@ -84,6 +86,20 @@ final class LongPressEditor extends MouseAdapter {
 	@Override
 	public void mouseReleased(MouseEvent e) {
 		cancelTimer();
+		if (editor != null) {
+			// the release that ends the long press must not take the editor away or drop its selection
+			var field = editor;
+			SwingUtilities.invokeLater(() -> refocus(field));
+		}
+	}
+
+	private void refocus(JTextField field) {
+		if (editor == field) {
+			field.requestFocusInWindow();
+			if (!edited) {
+				field.selectAll();
+			}
+		}
 	}
 
 	@Override
@@ -168,11 +184,39 @@ final class LongPressEditor extends MouseAdapter {
 		field.addFocusListener(new FocusAdapter() {
 			@Override
 			public void focusLost(FocusEvent ev) {
-				if (editor == field) {
+				if (editor != field) {
+					return;
+				}
+				var other = ev.getOppositeComponent();
+				if (!ev.isTemporary() && (other == table || other == null) && table.isShowing() && System.currentTimeMillis() - started < 1500) {
+					// the list took the focus back (mouse release, selection change): give it back to the editor
+					SwingUtilities.invokeLater(() -> refocus(field));
+				} else if (!ev.isTemporary()) {
 					closeEditor();
 				}
 			}
 		});
+		field.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+			@Override
+			public void insertUpdate(javax.swing.event.DocumentEvent ev) {
+				edited = true;
+			}
+
+			@Override
+			public void removeUpdate(javax.swing.event.DocumentEvent ev) {
+				edited = true;
+			}
+
+			@Override
+			public void changedUpdate(javax.swing.event.DocumentEvent ev) {
+				edited = true;
+			}
+		});
+		var caret = new BlockCaret();
+		caret.setBlinkRate(530);
+		field.setCaret(caret);
+		edited = false;
+		started = System.currentTimeMillis();
 		editor = field;
 		table.add(field);
 		field.requestFocusInWindow();
@@ -257,5 +301,56 @@ final class LongPressEditor extends MouseAdapter {
 		});
 		var rect = table.getCellRect(row, column, true);
 		menu.show(table, rect.x, rect.y + rect.height);
+	}
+
+	/** A block cursor like on the C64: a blinking filled cell in the text colour with the character reversed. */
+	private static final class BlockCaret extends javax.swing.text.DefaultCaret {
+		private static final long serialVersionUID = 1L;
+
+		private int cellWidth(javax.swing.text.JTextComponent c) {
+			return Math.max(4, c.getFontMetrics(c.getFont()).charWidth('M'));
+		}
+
+		@Override
+		public void paint(java.awt.Graphics g) {
+			var c = getComponent();
+			if (c == null || !isVisible()) {
+				return;
+			}
+			try {
+				var r = c.modelToView2D(getDot());
+				if (r == null) {
+					return;
+				}
+				var fm = c.getFontMetrics(c.getFont());
+				int x = (int) r.getX();
+				int y = (int) r.getY();
+				int w = cellWidth(c);
+				int h = (int) r.getHeight();
+				g.setColor(c.getCaretColor());
+				g.fillRect(x, y, w, h);
+				int dot = getDot();
+				var text = c.getText();
+				if (dot < text.length()) {
+					g.setColor(c.getBackground());
+					g.setFont(c.getFont());
+					g.drawString(String.valueOf(text.charAt(dot)), x, y + fm.getAscent());
+				}
+			} catch (BadLocationException e) {
+				// nothing to paint
+			}
+		}
+
+		@Override
+		protected synchronized void damage(java.awt.Rectangle r) {
+			if (r != null) {
+				var c = getComponent();
+				x = r.x;
+				y = r.y;
+				width = (c != null ? cellWidth(c) : 8) + 2;
+				height = r.height;
+				repaint();
+			}
+		}
 	}
 }
