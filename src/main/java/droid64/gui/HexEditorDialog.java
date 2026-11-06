@@ -107,7 +107,11 @@ public final class HexEditorDialog extends JDialog {
 			}
 		});
 
-		var tools = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+		var tools = new JPanel(new java.awt.GridLayout(2, 1));
+		var tools1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+		var tools2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+		tools.add(tools1);
+		tools.add(tools2);
 		saveButton.addActionListener(e -> save());
 		saveButton.setEnabled(saver != null);
 		undoButton.addActionListener(e -> undo());
@@ -131,8 +135,8 @@ public final class HexEditorDialog extends JDialog {
 			updateStatus();
 		});
 		var modeBox = new JComboBox<>(new String[] { "ASCII", "C64 upper case", "C64 lower case" });
-		modeBox.setSelectedIndex(1);
-		textMode = 1;
+		modeBox.setSelectedIndex(0);
+		textMode = 0;
 		modeBox.addActionListener(e -> {
 			textMode = modeBox.getSelectedIndex();
 			canvas.repaint();
@@ -140,14 +144,17 @@ public final class HexEditorDialog extends JDialog {
 		});
 		for (var b : new JButton[] { saveButton, undoButton, redoButton, find, next, go, fill, ins, del }) {
 			b.setFocusable(false);
-			tools.add(b);
+			b.setMargin(new java.awt.Insets(2, 6, 2, 6));
+			tools1.add(b);
 		}
 		insBox.setFocusable(false);
-		tools.add(insBox);
-		tools.add(new JLabel("Characters"));
+		tools2.add(insBox);
+		tools2.add(new JLabel("Characters"));
 		modeBox.setFocusable(false);
-		tools.add(modeBox);
+		tools2.add(modeBox);
 		var machineBox = new JComboBox<>(C64.Machine.values());
+		machineBox.setPrototypeDisplayValue(C64.Machine.PLUS4);
+		modeBox.setPrototypeDisplayValue("C64 lower case");
 		machineBox.setSelectedItem(this.machine);
 		machineBox.addActionListener(e -> {
 			this.machine = (C64.Machine) machineBox.getSelectedItem();
@@ -155,10 +162,11 @@ public final class HexEditorDialog extends JDialog {
 			canvas.requestFocusInWindow();
 		});
 		machineBox.setFocusable(false);
-		tools.add(new JLabel("Computer"));
-		tools.add(machineBox);
+		tools2.add(new JLabel("Computer"));
+		tools2.add(machineBox);
 
 		scroll = new JScrollPane(canvas);
+		scroll.setColumnHeaderView(canvas.header());
 		scroll.getVerticalScrollBar().setUnitIncrement(canvas.lineHeight());
 		status.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
 		status.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -168,10 +176,16 @@ public final class HexEditorDialog extends JDialog {
 		getContentPane().add(scroll, BorderLayout.CENTER);
 		getContentPane().add(status, BorderLayout.SOUTH);
 		installKeys();
-		setSize(Math.max(canvas.getPreferredSize().width + 40, 1120), 620);
+		setSize(canvas.getPreferredSize().width + 30, 520);
 		setLocationRelativeTo(mainPanel.getParent());
 		updateStatus();
 		canvas.requestFocusInWindow();
+	}
+
+	/** The font of the file tables, as used by the hex view. */
+	private static Font tableFont() {
+		var f = Setting.SYS_FONT.getFont();
+		return f != null ? f : new Font(Font.MONOSPACED, Font.PLAIN, 12);
 	}
 
 	// ------------------------------------------------------------------ editing
@@ -618,11 +632,15 @@ public final class HexEditorDialog extends JDialog {
 	private final class Canvas extends JComponent implements Scrollable {
 
 		private static final long serialVersionUID = 1L;
-		private final Font font = new Font(Font.MONOSPACED, Font.PLAIN, 14);
+		private final Font font = tableFont();
 		private final FontMetrics fm = getFontMetrics(font);
-		private final int cw = 10;
-		private final int lh = 18;
-		private static final int PAD = 8;
+		private final int cw = fm.charWidth('0');
+		private final int lh = fm.getHeight() + 4;
+		private final int hw = 3 * cw;
+		private final Color gridColor = new Color(0xB8B8B8);
+		private final Color headColor = new Color(0xC8C8C8);
+		private final Color selColor = new Color(205, 226, 255);
+		private final Color changedColor = new Color(255, 224, 176);
 
 		Canvas() {
 			setFocusable(true);
@@ -674,28 +692,20 @@ public final class HexEditorDialog extends JDialog {
 			return lh;
 		}
 
-		private int addrWidth() {
-			return data.length > 0x10000 ? 6 : 4;
-		}
-
-		private int offX() {
-			return PAD;
-		}
-
 		private int memX() {
-			return offX() + (addrWidth() + 2) * cw;
+			return 10 * cw;
 		}
 
 		private int hexX() {
-			return memX() + (prg ? 7 * cw : 0);
+			return memX() + (prg ? 8 * cw : 0);
 		}
 
 		private int hexCol(int col) {
-			return hexX() + col * 3 * cw + (col >= 8 ? cw : 0);
+			return hexX() + col * hw;
 		}
 
 		private int textX() {
-			return hexCol(PER_ROW) + 2 * cw;
+			return hexX() + PER_ROW * hw;
 		}
 
 		private int rows() {
@@ -705,28 +715,19 @@ public final class HexEditorDialog extends JDialog {
 		Rectangle cellRect(int index, boolean text) {
 			int row = index / PER_ROW;
 			int col = index % PER_ROW;
-			return text ? new Rectangle(textX() + col * cw, PAD + row * lh, cw, lh) : new Rectangle(hexCol(col), PAD + row * lh, 2 * cw, lh);
+			return text ? new Rectangle(textX() + cw + col * cw, row * lh, cw, lh) : new Rectangle(hexCol(col), row * lh, hw, lh);
 		}
 
 		private int indexAt(int x, int y) {
-			int row = (y - PAD) / lh;
-			if (row < 0) {
-				return -1;
-			}
-			int col = -1;
+			int row = y / lh;
+			int col;
 			if (x >= textX()) {
-				col = (x - textX()) / cw;
+				col = Math.max(0, Math.min(PER_ROW - 1, (x - textX() - cw) / cw));
 				textPane = true;
 			} else if (x >= hexX()) {
-				for (int c = PER_ROW - 1; c >= 0; c--) {
-					if (x >= hexCol(c)) {
-						col = c;
-						break;
-					}
-				}
+				col = (x - hexX()) / hw;
 				textPane = false;
-			}
-			if (col < 0 || col >= PER_ROW) {
+			} else {
 				return -1;
 			}
 			return Math.min(row * PER_ROW + col, Math.max(data.length - (insertMode ? 0 : 1), 0));
@@ -734,97 +735,129 @@ public final class HexEditorDialog extends JDialog {
 
 		@Override
 		public Dimension getPreferredSize() {
-			return new Dimension(textX() + PER_ROW * cw + PAD * 2, PAD * 2 + rows() * lh);
+			return new Dimension(textX() + (PER_ROW + 2) * cw, rows() * lh);
+		}
+
+		/** Column titles above the table, like the headers of the hex view. */
+		JComponent header() {
+			return new JComponent() {
+				private static final long serialVersionUID = 1L;
+
+				@Override
+				public Dimension getPreferredSize() {
+					return new Dimension(Canvas.this.getPreferredSize().width, lh + 2);
+				}
+
+				@Override
+				protected void paintComponent(Graphics g0) {
+					var g = (Graphics2D) g0.create();
+					g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+					g.setFont(font.deriveFont(Font.BOLD));
+					var m = g.getFontMetrics();
+					g.setColor(headColor);
+					g.fillRect(0, 0, getWidth(), getHeight());
+					g.setColor(gridColor);
+					int base = getHeight() - 1;
+					g.drawLine(0, base, getWidth(), base);
+					title(g, m, "Address", 0, memX());
+					if (prg) {
+						title(g, m, "Memory", memX(), hexX());
+					}
+					for (int c = 0; c < PER_ROW; c++) {
+						title(g, m, Integer.toHexString(c).toUpperCase(), hexCol(c), hexCol(c) + hw);
+					}
+					title(g, m, "ASCII", textX(), getWidth());
+					g.dispose();
+				}
+
+				private void title(Graphics2D g, FontMetrics m, String text, int x0, int x1) {
+					g.setColor(gridColor);
+					g.drawLine(x1 - 1, 0, x1 - 1, getHeight());
+					g.setColor(Color.BLACK);
+					g.drawString(text, x0 + (x1 - x0 - m.stringWidth(text)) / 2, (getHeight() - m.getHeight()) / 2 + m.getAscent());
+				}
+			};
 		}
 
 		@Override
 		protected void paintComponent(Graphics g0) {
 			var g = (Graphics2D) g0.create();
-			g.setColor(machine.background);
+			g.setColor(Color.WHITE);
 			g.fillRect(0, 0, getWidth(), getHeight());
 			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 			g.setFont(font);
 			var clip = g.getClipBounds();
-			int firstRow = Math.max(0, (clip.y - PAD) / lh);
-			int lastRow = Math.min(rows() - 1, (clip.y + clip.height - PAD) / lh);
-			var fg = machine.foreground;
-			var addrColor = machine.mix(0.6);
-			var selColor = machine.mix(0.5);
-			var changedColor = machine.mix(0.2);
+			int firstRow = Math.max(0, clip.y / lh);
+			int lastRow = Math.min(rows() - 1, (clip.y + clip.height) / lh);
+			g.setColor(headColor);
+			g.fillRect(0, clip.y, hexX(), clip.height);
 			int selFrom = hasSelection() ? selStart() : -1;
 			int selTo = hasSelection() ? selEnd() : -1;
+			int asc = fm.getAscent() + 2;
 			for (int row = firstRow; row <= lastRow; row++) {
-				int y = PAD + row * lh;
+				int y = row * lh;
 				int base = row * PER_ROW;
-				glyphs(g, String.format("%0" + addrWidth() + "X", base), offX(), y, addrColor, machine.background);
-				if (prg && base + PER_ROW > 2) {
-					int addr = loadAddress() + Math.max(base, 2) - 2;
-					glyphs(g, base >= 2 ? String.format("$%04X", addr & 0xffff) : "", memX(), y, addrColor, machine.background);
+				g.setColor(Color.BLACK);
+				g.drawString(String.format("%08X", base), 4, y + asc);
+				if (prg && base + PER_ROW > 2 && base >= 2) {
+					g.drawString(String.format("$%04X", (loadAddress() + base - 2) & 0xffff), memX() + 4, y + asc);
 				}
 				for (int col = 0; col < PER_ROW; col++) {
 					int i = base + col;
-					boolean exists = i < data.length;
-					var hr = new Rectangle(hexCol(col) - cw / 2, y, 3 * cw, lh);
-					var tr = new Rectangle(textX() + col * cw, y, cw, lh);
-					boolean sel = exists && i >= selFrom && i <= selTo && selFrom >= 0;
-					boolean diff = exists && (i >= saved.length || saved[i] != data[i]);
-					if (sel || diff) {
-						g.setColor(sel ? selColor : changedColor);
-						g.fillRect(hr.x, hr.y, hr.width - cw / 2, hr.height);
-						g.fillRect(tr.x, tr.y, tr.width, tr.height);
+					if (i >= data.length) {
+						break;
 					}
-					if (!exists) {
-						continue;
+					boolean sel = i >= selFrom && i <= selTo && selFrom >= 0;
+					boolean diff = i >= saved.length || saved[i] != data[i];
+					var bg = sel ? selColor : diff ? changedColor : Color.WHITE;
+					var hr = cellRect(i, false);
+					var tr = cellRect(i, true);
+					if (sel || diff) {
+						g.setColor(bg);
+						g.fillRect(hr.x, hr.y, hr.width - 1, hr.height - 1);
+						g.fillRect(tr.x, tr.y, tr.width, tr.height - 1);
 					}
 					int v = data[i] & 0xff;
-					var cellBg = sel ? selColor : diff ? changedColor : machine.background;
-					glyphs(g, String.format("%02X", v), hexCol(col), y, prg && i < 2 ? machine.mix(0.6) : fg, cellBg);
-					drawChar(g, v, tr, cellBg, fg);
+					g.setColor(prg && i < 2 ? new Color(0x9A3B8A) : Color.BLACK);
+					g.drawString(String.format("%02X", v), hr.x + cw / 2, y + asc);
+					drawChar(g, v, tr, bg);
 				}
+			}
+			// grid
+			g.setColor(gridColor);
+			for (int row = firstRow; row <= lastRow + 1; row++) {
+				g.drawLine(0, row * lh - 1, textX() + (PER_ROW + 2) * cw, row * lh - 1);
+			}
+			g.drawLine(memX() - 1, clip.y, memX() - 1, clip.y + clip.height);
+			g.drawLine(hexX() - 1, clip.y, hexX() - 1, clip.y + clip.height);
+			for (int c = 1; c <= PER_ROW; c++) {
+				g.drawLine(hexCol(c) - 1, clip.y, hexCol(c) - 1, clip.y + clip.height);
 			}
 			// cursor
 			if (cursor <= data.length) {
 				var hr = cellRect(cursor, false);
 				var tr = cellRect(cursor, true);
-				g.setColor(machine.foreground);
+				g.setColor(new Color(0xD03A30));
 				var active = textPane ? tr : hr;
 				var other = textPane ? hr : tr;
-				g.drawRect(active.x - 1, active.y, textPane ? active.width : active.width, active.height - 1);
-				if (!textPane && lowNibble) {
-					g.fillRect(hr.x + cw, hr.y + lh - 3, cw, 2);
-				} else if (!textPane) {
-					g.fillRect(hr.x, hr.y + lh - 3, cw, 2);
+				g.drawRect(active.x, active.y, active.width - 1, active.height - 2);
+				if (!textPane) {
+					g.fillRect(hr.x + cw / 2 + (lowNibble ? cw : 0), hr.y + lh - 4, cw, 2);
 				}
-				g.setColor(machine.mix(0.6));
-				g.drawRect(other.x, other.y + lh - 3, other.width, 1);
+				g.setColor(new Color(0x2F6FD6));
+				g.drawRect(other.x, other.y + lh - 4, other.width - 1, 1);
 			}
 			g.dispose();
 		}
 
-		/** Draw text with the character ROM of the computer. */
-		private void glyphs(Graphics2D g, String text, int x, int y, Color color, Color bg) {
-			for (int i = 0; i < text.length(); i++) {
-				int pet = C64.asciiToPetscii(text.charAt(i));
-				if (text.charAt(i) == '$') {
-					pet = 0x24;
-				}
-				if (pet < 0) {
-					continue;
-				}
-				C64.drawPetscii(g, pet, x + i * cw, y + 1, cw, lh - 2, color, bg, machine, false);
-			}
-		}
-
-		private void drawChar(Graphics2D g, int v, Rectangle r, Color bg, Color fg) {
+		private void drawChar(Graphics2D g, int v, Rectangle r, Color bg) {
 			if (textMode == 0) {
-				g.setColor(fg);
-				var s = v >= 0x20 && v < 0x7f ? String.valueOf((char) v) : "·";
-				g.drawString(s, r.x, r.y + fm.getAscent() + 1);
+				g.setColor(Color.BLACK);
+				var s = v >= 0x20 && v < 0x7f ? String.valueOf((char) v) : ".";
+				g.drawString(s, r.x + (cw - fm.stringWidth(s)) / 2, r.y + fm.getAscent() + 2);
 			} else {
-				// C64 character ROM glyphs, dark on light like the rest of the editor
-				var oldHint = g.getRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING);
-				C64.drawPetscii(g, v, r.x, r.y + 1, r.width, r.height - 2, fg, bg, machine, textMode == 2);
-				g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, oldHint);
+				// glyphs of the computer's character ROM, black on white
+				C64.drawPetscii(g, v, r.x, r.y + 2, r.width, r.height - 4, Color.BLACK, bg, machine, textMode == 2);
 			}
 		}
 
