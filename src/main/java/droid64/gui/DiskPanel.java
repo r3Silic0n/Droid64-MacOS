@@ -1459,6 +1459,12 @@ public class DiskPanel extends JPanel implements TableModelListener {
 				return;
 			}
 			mainPanel.appendConsole("Unload disk.");
+			// go back to the folder the image is in (also when the image was reopened at start-up, when no folder is known yet)
+			var imageFile = diskImage.getFile();
+			if (imageFile != null && imageFile.isFile() && imageFile.getAbsoluteFile().getParentFile() != null) {
+				currentImagePath = imageFile.getAbsoluteFile().getParentFile();
+			}
+			final String imageName = imageFile != null ? imageFile.getName() : null;
 			diskImage = null;
 			setDiskName(null);
 			imageLoaded = false;
@@ -1471,6 +1477,15 @@ public class DiskPanel extends JPanel implements TableModelListener {
 				table.getSelectionModel().setSelectionInterval(openedRow, openedRow);
 				table.scrollRectToVisible(new Rectangle(table.getCellRect(openedRow, 0, true)));
 				openedRow = null;
+			} else if (imageName != null) {
+				// no row remembered (e.g. the image was reopened at start-up): select the image's own row
+				for (int r = 0; r < table.getRowCount(); r++) {
+					if (imageName.equals(table.getValueAt(r, 1))) {
+						table.getSelectionModel().setSelectionInterval(r, r);
+						table.scrollRectToVisible(new Rectangle(table.getCellRect(r, 0, true)));
+						break;
+					}
+				}
 			}
 		} else {
 			mainPanel.appendConsole("Load parent.");
