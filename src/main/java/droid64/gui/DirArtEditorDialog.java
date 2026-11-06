@@ -236,7 +236,7 @@ public class DirArtEditorDialog extends JDialog {
 		if (image != null && DirArtWriter.isSupported(image)) {
 			sb.append(" - disk allows up to ").append(DirArtWriter.maxEntries(image));
 		} else {
-			sb.append(" - no D64 / D71 / D81 image is loaded in the active list, "Write to disk" saves the DIR art as a new disk image");
+			sb.append(" - no D64 / D71 / D81 image is loaded in the active list, Write to disk saves the DIR art as a new disk image");
 		}
 		sb.append(String.format(" - brush: $%02X (the space character erases)", brush));
 		sb.append(" - left click draws, right click picks, shift / ctrl click selects lines, type to enter text");
