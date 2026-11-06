@@ -127,6 +127,11 @@ public class ExternalProgram {
 			break;
 		case "cbmctrl":
 		case "d64copy":
+		case "d82copy":
+		case "imgcopy":
+		case "cbmcopy":
+		case "cbmformat":
+		case "cbmforng":
 			var bundled = bundledOpenCbm();
 			return bundled != null ? new File(bundled, cmd).getPath() : cmd;
 		default:

@@ -454,7 +454,9 @@ public class MainPanel implements Serializable {
 				if (event.getSource() == pluginButtons[cnt] ){
 					var diskPanel = getActiveDiskPanel();
 					var prg = list.get(cnt);
-					if (diskPanel != null && prg != null) {
+					if (prg != null && isOpenCbmProgram(prg)) {
+						OpenCbmDialog.show(this);
+					} else if (diskPanel != null && prg != null) {
 						diskPanel.doExternalProgram(prg);
 					}
 				}
@@ -470,6 +472,10 @@ public class MainPanel implements Serializable {
 			var ep = externalPrograms.get(i);
 			var label = ep != null ? ep.getLabel() : null;
 			var tooltip = ep != null ? ep.getDescription() : null;
+			if (ep != null && isOpenCbmProgram(ep)) {
+				label = "OpenCBM";
+				tooltip = "OpenCBM: copy, format and control real Commodore drives";
+			}
 			var actionButton = i < pluginActionButtons.size() ? pluginActionButtons.get(i) : null;
 			pluginButtons[i] = createButton(label != null ? label : "", actionButton, tooltip, pluginButtonListener);
 		}
@@ -478,6 +484,12 @@ public class MainPanel implements Serializable {
 		consoleHideButton.setSelected(Setting.HIDECONSOLE.getBoolean());
 		createButton(ActionButton.SETTINGS_BUTTON, ae -> showSettings(parent));
 		createButton(ActionButton.EXIT_BUTTON, ae -> exitThisProgram());
+	}
+
+	/** The old "d64copy" plugin slot opens the OpenCBM window. */
+	private static boolean isOpenCbmProgram(ExternalProgram ep) {
+		var cmd = ep.getCommand();
+		return "opencbm".equalsIgnoreCase(cmd) || "d64copy".equals(cmd);
 	}
 
 	private void hideConsole(boolean hide) {
