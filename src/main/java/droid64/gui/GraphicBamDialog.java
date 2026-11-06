@@ -126,6 +126,7 @@ public class GraphicBamDialog extends JDialog {
 				x = Math.max(0, screen.width - editorDialog.getWidth());
 			}
 			editorDialog.setLocation(x, main.y);
+			restoreEditorBounds(screen);
 		} else {
 			editor.gotoSector(t, s);
 		}
@@ -135,6 +136,35 @@ public class GraphicBamDialog extends JDialog {
 		editor.focusEditor();
 	}
 
+	/** The sector editor window opens where and as large as it was when it was closed the last time. */
+	private void restoreEditorBounds(java.awt.Dimension screen) {
+		try {
+			var p = Setting.SECTOR_EDITOR_BOUNDS.getString().split(",");
+			if (p.length == 4) {
+				int x = Integer.parseInt(p[0].trim());
+				int y = Integer.parseInt(p[1].trim());
+				int w = Integer.parseInt(p[2].trim());
+				int h = Integer.parseInt(p[3].trim());
+				// only if a good part of it is on the screen
+				if (w >= 300 && h >= 200 && x + w > 100 && y + h > 100 && x < screen.width - 100 && y < screen.height - 100) {
+					editorDialog.setBounds(x, y, w, h);
+				}
+			}
+		} catch (RuntimeException e) {
+			// no saved position: keep the default
+		}
+	}
+
+	private void saveEditorBounds() {
+		var b = editorDialog.getBounds();
+		Setting.SECTOR_EDITOR_BOUNDS.set(b.x + "," + b.y + "," + b.width + "," + b.height);
+		try {
+			Setting.save();
+		} catch (java.io.IOException e) {
+			// saved at exit with the other settings
+		}
+	}
+
 	private boolean closeEditor() {
 		if (editor == null) {
 			return true;
@@ -142,6 +172,7 @@ public class GraphicBamDialog extends JDialog {
 		if (!editor.confirmLeave()) {
 			return false;
 		}
+		saveEditorBounds();
 		editorDialog.dispose();
 		editorDialog = null;
 		editor = null;

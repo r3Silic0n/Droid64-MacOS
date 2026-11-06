@@ -67,6 +67,7 @@ public enum Setting {
 	FTP_LOCAL_DIR("ftp_local_dir",               ParameterType.STRING,           Utility.EMPTY),
 	OPENCBM_DEVICE("opencbm_device",             ParameterType.STRING,           "8"),
 	OPENCBM_TRANSFER("opencbm_transfer",         ParameterType.STRING,           "auto"),
+	SECTOR_EDITOR_BOUNDS("sector_editor_bounds", ParameterType.STRING,           Utility.EMPTY),
 	OPENCBM_DIR("opencbm_dir",                   ParameterType.STRING,           Utility.EMPTY),
 	UPDATE_AUTO("update_auto",                   ParameterType.BOOLEAN,          Boolean.TRUE),
 	UPDATE_LAST("update_last",                   ParameterType.INTEGER,          Integer.valueOf(0)),
