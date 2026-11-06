@@ -252,13 +252,8 @@ public class MusicPlayerDialog extends JDialog {
 		row = infoRow(right, g, row, "STIL", stilScroll);
 		infoTitle.setFont(infoTitle.getFont().deriveFont(Font.BOLD, 15f));
 
-		var songs = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-		songs.add(prevSong);
-		songs.add(songLabel);
-		songs.add(nextSong);
 		prevSong.addActionListener(e -> changeSong(-1));
 		nextSong.addActionListener(e -> changeSong(1));
-		row = infoRow(right, g, row, "Tune", songs);
 
 		g.gridx = 0;
 		g.gridy = row++;
@@ -300,6 +295,11 @@ public class MusicPlayerDialog extends JDialog {
 		var transport = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
 		transport.add(playButton);
 		transport.add(stopButton);
+		transport.add(javax.swing.Box.createHorizontalStrut(8));
+		transport.add(prevSong);
+		transport.add(songLabel);
+		transport.add(nextSong);
+		transport.add(javax.swing.Box.createHorizontalStrut(8));
 		transport.add(timeLabel);
 		transport.add(new JLabel("  Volume"));
 		volume.setPreferredSize(new Dimension(110, 24));
