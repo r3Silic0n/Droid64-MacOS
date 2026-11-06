@@ -210,6 +210,12 @@ public class DiskPanel extends JPanel implements TableModelListener {
 				processFileTableKeyEvent(ev.getKeyCode());
 			}
 		});
+		// hold the left button on a name to rename it in place, on the type to change it
+		new LongPressEditor(table,
+				row -> imageLoaded && !zipFileLoaded && tableModel.getMode() == EntryTableModel.MODE_CBM && diskImage != null
+						&& row < diskImage.getCbmFileSize() && diskImage.getCbmFile(row).getFileType() != FileType.CBM,
+				row -> diskImage.getCbmFile(row).getFileType().name(),
+				this::renameInPlace, (row, type) -> setTypeOfFiles(new int[] { row }, type));
 		final boolean[] popupShown = { false };
 		table.addMouseListener(new MouseAdapter() {
 			@Override
@@ -1425,6 +1431,22 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		if (changed) {
 			diskImage.save();
 			reloadDiskImage(true);
+		}
+	}
+
+	/** Rename one file after it was edited in the list. The type is kept. */
+	private void renameInPlace(int row, String newName) {
+		try {
+			var cbmFile = diskImage.getCbmFile(row);
+			mainPanel.formatConsole("New filename is: \"%s\" %s.\n[%d] \"%s\"", newName, cbmFile.getFileType(), cbmFile.getDirPosition(), cbmFile.getName());
+			diskImage.renameFile(row, newName, cbmFile.getFileType());
+			diskImage.save();
+			reloadDiskImage(true);
+			if (row < table.getRowCount()) {
+				table.setRowSelectionInterval(row, row);
+			}
+		} catch (Exception e) {
+			GuiHelper.showException(mainPanel.getParent(), "Error", e, "Failed to rename file.");
 		}
 	}
 
