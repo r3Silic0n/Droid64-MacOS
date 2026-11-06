@@ -48,7 +48,7 @@ public class DirArtEditorDialog extends JDialog {
 	private final transient DiskImage image;
 	private final List<DirArtWriter.Row> rows = new ArrayList<>();
 	private final byte[] header = new byte[DirArtWriter.NAME_LENGTH];
-	private final JTextField idField = new JTextField("00", 5);
+	private final JTextField idField = new JTextField("00 2A", 5);
 	private final JSpinner rowCount;
 	private final JComboBox<DirArtWriter.Mode> modeBox = new JComboBox<>(DirArtWriter.Mode.values());
 	private final JCheckBox writeHeader = new JCheckBox("Also write disk name and ID", true);
@@ -228,6 +228,25 @@ public class DirArtEditorDialog extends JDialog {
 		info.setText(sb.toString());
 	}
 
+	/** The 5 bytes of the disk ID field (ID, shifted space, DOS type) as text. */
+	static String idText(byte[] id) {
+		var sb = new StringBuilder();
+		for (int i = 0; i < DirArtWriter.ID_LENGTH && i < id.length; i++) {
+			sb.append((id[i] & 0xff) == 0xa0 ? ' ' : (char) (id[i] & 0x7f));
+		}
+		return sb.toString();
+	}
+
+	/** The text of the disk ID field as the 5 bytes of the header; a space is a shifted space ($A0), like Rename Disk does. */
+	static byte[] idBytes(String text) {
+		var b = new byte[DirArtWriter.ID_LENGTH];
+		for (int i = 0; i < b.length; i++) {
+			char c = i < text.length() ? Character.toUpperCase(text.charAt(i)) : ' ';
+			b[i] = c == ' ' ? (byte) 0xa0 : (byte) c;
+		}
+		return b;
+	}
+
 	/** Show the DEL entries that are selected in the file list, to edit them in place. */
 	private void loadSelectedDel(List<Integer> indexes) {
 		if (indexes.isEmpty()) {
@@ -252,7 +271,7 @@ public class DirArtEditorDialog extends JDialog {
 			modeBox.setSelectedItem(DirArtWriter.Mode.UPDATE);
 			writeHeader.setSelected(false);
 			var id = DirArtWriter.readDiskId(image);
-			idField.setText(new String(new char[] { (char) (id[0] & 0x7f), (char) (id[1] & 0x7f) }));
+			idField.setText(idText(id));
 			var name = DirArtWriter.readDiskName(image);
 			for (int i = 0; i < name.length; i++) {
 				header[i] = (name[i] & 0xff) == 0xa0 ? (byte) 0x20 : name[i];
@@ -280,7 +299,7 @@ public class DirArtEditorDialog extends JDialog {
 				header[i] = (name[i] & 0xff) == 0xa0 ? (byte) 0x20 : name[i];
 			}
 			var id = DirArtWriter.readDiskId(image);
-			idField.setText(new String(new char[] { (char) (id[0] & 0x7f), (char) (id[1] & 0x7f) }));
+			idField.setText(idText(id));
 			updating = true;
 			rowCount.setValue(rows.size());
 			updating = false;
@@ -321,9 +340,7 @@ public class DirArtEditorDialog extends JDialog {
 			byte[] diskId = null;
 			if (writeHeader.isSelected()) {
 				diskName = header.clone();
-				var text = idField.getText();
-				diskId = new byte[] { (byte) (text.length() > 0 ? C64.asciiToPetscii(text.charAt(0)) : 0x30),
-						(byte) (text.length() > 1 ? C64.asciiToPetscii(text.charAt(1)) : 0x30) };
+				diskId = idBytes(idField.getText());
 			}
 			DirArtWriter.write(image, toWrite, mode, diskName, diskId);
 			if (panel != null) {
@@ -507,7 +524,7 @@ public class DirArtEditorDialog extends JDialog {
 			for (int c = 0; c < DirArtWriter.NAME_LENGTH; c++) {
 				C64.drawPetscii(g, header[c] & 0xff, (ART_COL + c) * CELL, 0, CELL, CELL, bg, fg, drawMachine, drawLower);
 			}
-			drawText(g, "\" " + idField.getText().toUpperCase() + " 2A", ART_COL + DirArtWriter.NAME_LENGTH, 0, fg, headBg);
+			drawText(g, "\" " + String.format("%-5s", idField.getText().toUpperCase()), ART_COL + DirArtWriter.NAME_LENGTH, 0, fg, headBg);
 			g.translate(0, GAP);
 			for (int r = 0; r < rows.size(); r++) {
 				var row = rows.get(r);

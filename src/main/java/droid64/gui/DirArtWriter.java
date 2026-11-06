@@ -182,17 +182,20 @@ final class DirArtWriter {
 		return Arrays.copyOfRange(block, pos, pos + NAME_LENGTH);
 	}
 
-	/** Disk ID (2 bytes) from the header sector. */
+	/** Length of the disk ID field in the header: ID (2), shifted space, DOS type (2). */
+	static final int ID_LENGTH = 5;
+
+	/** Disk ID (5 bytes: ID, shifted space, DOS type) from the header sector. */
 	static byte[] readDiskId(DiskImage image) throws CbmException {
 		var block = image.getBlock(dirTrack(image), 0);
 		int pos = image instanceof D81 ? 0x16 : 0xa2;
-		return Arrays.copyOfRange(block, pos, pos + 2);
+		return Arrays.copyOfRange(block, pos, pos + ID_LENGTH);
 	}
 
 	/**
 	 * Write entries to the directory of the image (in memory; save the image afterwards).
 	 * @param diskName new disk name, or null to leave the header as it is
-	 * @param diskId new disk ID (2 bytes), or null
+	 * @param diskId new disk ID (5 bytes: ID, shifted space, DOS type), or null
 	 */
 	static void write(DiskImage image, List<Row> rows, Mode mode, byte[] diskName, byte[] diskId) throws CbmException {
 		if (!isSupported(image)) {
@@ -264,8 +267,7 @@ final class DirArtWriter {
 			}
 			if (diskId != null && diskId.length >= 2) {
 				int pos = image instanceof D81 ? 0x16 : 0xa2;
-				header[pos] = diskId[0];
-				header[pos + 1] = diskId[1];
+				System.arraycopy(diskId, 0, header, pos, Math.min(ID_LENGTH, diskId.length));
 			}
 			image.writeBlock(track, 0, header);
 		}
