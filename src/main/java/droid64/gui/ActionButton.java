@@ -25,7 +25,7 @@ public enum ActionButton {
 	RENAME_DISK_BUTTON(     18, Resources.DROID64_BUTTON_RENAMEDISK,    'i', false),
 	SORT_FILES_BUTTON(      19, Resources.DROID64_BUTTON_SORT,          'S', false),
 	RENAME_FILE_BUTTON(     20, Resources.DROID64_BUTTON_RENAME,        'r', false),
-	PLUGIN_7_BUTTON(        21, "",                                     '7', true),
+	IMAGE_CONVERT_BUTTON(   21, Resources.DROID64_BUTTON_CONVERT,       'c', false),
 	PLAY_MUSIC_BUTTON(      22, Resources.DROID64_BUTTON_PLAYMUSIC,     'P', false),
 	PLUGIN_3_BUTTON(        23, "",                                     '3', true),
 	SETTINGS_BUTTON(        24, Resources.DROID64_BUTTON_SETTINGS,      'S', false),

@@ -20,6 +20,7 @@ public class Resources {
 	public static final String DROID64_BUTTON_MKDIR = "droid64.button.mkdir";
 	public static final String DROID64_BUTTON_FTP = "droid64.button.ftp";
 	public static final String DROID64_BUTTON_HEXEDIT = "droid64.button.hexedit";
+	public static final String DROID64_BUTTON_CONVERT = "droid64.button.convert";
 	public static final String DROID64_BUTTON_SEARCH = "droid64.button.search";
 	public static final String DROID64_BUTTON_RENAMEDISK = "droid64.button.renamedisk";
 	public static final String DROID64_BUTTON_RENAME = "droid64.button.rename";

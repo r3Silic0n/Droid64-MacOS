@@ -386,7 +386,7 @@ public class MainPanel implements Serializable {
 		case PLUGIN_3_BUTTON:
 		case PLUGIN_4_BUTTON:
 		case PLUGIN_5_BUTTON:
-		case PLUGIN_7_BUTTON:
+		case IMAGE_CONVERT_BUTTON:
 		case PLUGIN_8_BUTTON:
 			button.setBackground(adjustedColor(BASE_BUTTON_COLOR, -20, 20, 20));
 			break;
@@ -424,6 +424,10 @@ public class MainPanel implements Serializable {
 
 		boolean tape = activePanel != null && activePanel.isTapeLoaded();
 		enableButtons(activePanel != null && activePanel.isImageLoaded() && !tape, showBamButton);
+		var convert = buttonMap.get(ActionButton.IMAGE_CONVERT_BUTTON);
+		if (convert != null) {
+			convert.setEnabled(activePanel != null && activePanel.isImageLoaded() && !tape);
+		}
 		var dirArt = buttonMap.get(ActionButton.DIR_ART_BUTTON);
 		if (dirArt != null) {
 			dirArt.setEnabled(!tape);
@@ -463,7 +467,7 @@ public class MainPanel implements Serializable {
 		var externalPrograms = Setting.getExternalPrograms();
 		// plugin number -> button position (independent of the order the buttons are declared in)
 		var pluginActionButtons = Arrays.asList(ActionButton.PLUGIN_1_BUTTON, ActionButton.PLUGIN_2_BUTTON, ActionButton.PLUGIN_3_BUTTON,
-				null, null, ActionButton.PLUGIN_7_BUTTON, ActionButton.PLUGIN_8_BUTTON,
+				null, null, null, ActionButton.PLUGIN_8_BUTTON,
 				ActionButton.PLUGIN_4_BUTTON);
 		for (var i = 0; i < pluginButtons.length && i < externalPrograms.size(); i++) {
 			var ep = externalPrograms.get(i);
@@ -670,6 +674,7 @@ public class MainPanel implements Serializable {
 				}
 			}
 		});
+		createButton(ActionButton.IMAGE_CONVERT_BUTTON, event -> ImageConvertDialog.show(parent, getActiveDiskPanel()));
 		createButton(ActionButton.DIR_ART_BUTTON, event -> {
 			var diskPanel = getActiveDiskPanel();
 			DirArtEditorDialog.show(parent, diskPanel, diskPanel != null ? diskPanel.getDiskImage() : null);

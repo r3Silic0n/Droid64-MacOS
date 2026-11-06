@@ -256,6 +256,12 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		GuiHelper.addMenuItem(popMenu, Resources.DROID64_MENU_DISK_VIEWTEXT, 't', event -> showFile());
 		GuiHelper.addMenuItem(popMenu, Resources.DROID64_MENU_DISK_COPYFILE, 'c', event -> copyFile());
 		GuiHelper.addMenuItem(popMenu, Resources.DROID64_MENU_DISK_RENAMEFILE, 'r', event -> renameFile());
+		// the function of the former "VICE prg" button: run the selected program in VICE
+		var plugins = Setting.getExternalPrograms();
+		if (plugins.size() > 5 && plugins.get(5) != null) {
+			var viceProgram = plugins.get(5);
+			GuiHelper.addMenuItem(popMenu, viceProgram.getLabel(), null, event -> doExternalProgram(viceProgram));
+		}
 
 		var pluginMenu = new JMenu("Plugins");
 		pluginMenu.setMnemonic('p');
