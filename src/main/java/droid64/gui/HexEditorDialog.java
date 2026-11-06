@@ -67,6 +67,7 @@ public final class HexEditorDialog extends JDialog {
 	private int anchor = -1;
 	private boolean insertMode;
 	private C64.Machine machine = C64.Machine.C64;
+	private boolean computerColours;
 	private int textMode;	// 0 ASCII, 1 C64 upper case, 2 C64 lower case
 	private String lastFind = "";
 	private int lastFindKind;
@@ -152,17 +153,25 @@ public final class HexEditorDialog extends JDialog {
 		tools2.add(new JLabel("Characters"));
 		modeBox.setFocusable(false);
 		tools2.add(modeBox);
-		var machineBox = new JComboBox<>(C64.Machine.values());
+		// Plain keeps the colours of the hex view (the character set stays that of the detected computer);
+		// a computer gives its screen colours and its character set.
+		final var detected = this.machine;
+		var items = new java.util.ArrayList<Object>();
+		items.add("Plain");
+		items.addAll(java.util.Arrays.asList(C64.Machine.values()));
+		var machineBox = new JComboBox<>(items.toArray());
 		machineBox.setPrototypeDisplayValue(C64.Machine.PLUS4);
 		modeBox.setPrototypeDisplayValue("C64 lower case");
-		machineBox.setSelectedItem(this.machine);
+		machineBox.setSelectedIndex(0);
 		machineBox.addActionListener(e -> {
-			this.machine = (C64.Machine) machineBox.getSelectedItem();
-			canvas.repaint();
+			var sel = machineBox.getSelectedItem();
+			computerColours = sel instanceof C64.Machine;
+			this.machine = computerColours ? (C64.Machine) sel : detected;
+			canvas.applyPalette();
 			canvas.requestFocusInWindow();
 		});
 		machineBox.setFocusable(false);
-		tools2.add(new JLabel("Computer"));
+		tools2.add(new JLabel("Colours"));
 		tools2.add(machineBox);
 
 		scroll = new JScrollPane(canvas);
@@ -637,10 +646,45 @@ public final class HexEditorDialog extends JDialog {
 		private final int cw = fm.charWidth('0');
 		private final int lh = fm.getHeight() + 4;
 		private final int hw = 3 * cw;
-		private final Color gridColor = new Color(0xB8B8B8);
-		private final Color headColor = new Color(0xC8C8C8);
-		private final Color selColor = new Color(205, 226, 255);
-		private final Color changedColor = new Color(255, 224, 176);
+		private Color bgColor = Color.WHITE;
+		private Color fgColor = Color.BLACK;
+		private Color gridColor = new Color(0xB8B8B8);
+		private Color headColor = new Color(0xC8C8C8);
+		private Color selColor = new Color(205, 226, 255);
+		private Color changedColor = new Color(255, 224, 176);
+		private Color prgColor = new Color(0x9A3B8A);
+		private Color cursorColor = new Color(0xD03A30);
+		private Color otherColor = new Color(0x2F6FD6);
+
+		/** Plain: the colours of the hex view. Computer: the screen colours of the selected computer. */
+		void applyPalette() {
+			if (computerColours) {
+				bgColor = machine.background;
+				fgColor = machine.foreground;
+				gridColor = machine.mix(0.35);
+				headColor = machine.mix(0.15);
+				selColor = machine.mix(0.5);
+				changedColor = machine.mix(0.25);
+				prgColor = machine.mix(0.7);
+				cursorColor = machine.foreground;
+				otherColor = machine.mix(0.7);
+			} else {
+				bgColor = Color.WHITE;
+				fgColor = Color.BLACK;
+				gridColor = new Color(0xB8B8B8);
+				headColor = new Color(0xC8C8C8);
+				selColor = new Color(205, 226, 255);
+				changedColor = new Color(255, 224, 176);
+				prgColor = new Color(0x9A3B8A);
+				cursorColor = new Color(0xD03A30);
+				otherColor = new Color(0x2F6FD6);
+			}
+			setBackground(bgColor);
+			repaint();
+			if (getParent() != null && getParent().getParent() != null) {
+				getParent().getParent().repaint();
+			}
+		}
 
 		Canvas() {
 			setFocusable(true);
@@ -773,7 +817,7 @@ public final class HexEditorDialog extends JDialog {
 				private void title(Graphics2D g, FontMetrics m, String text, int x0, int x1) {
 					g.setColor(gridColor);
 					g.drawLine(x1 - 1, 0, x1 - 1, getHeight());
-					g.setColor(Color.BLACK);
+					g.setColor(fgColor);
 					g.drawString(text, x0 + (x1 - x0 - m.stringWidth(text)) / 2, (getHeight() - m.getHeight()) / 2 + m.getAscent());
 				}
 			};
@@ -782,7 +826,7 @@ public final class HexEditorDialog extends JDialog {
 		@Override
 		protected void paintComponent(Graphics g0) {
 			var g = (Graphics2D) g0.create();
-			g.setColor(Color.WHITE);
+			g.setColor(bgColor);
 			g.fillRect(0, 0, getWidth(), getHeight());
 			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 			g.setFont(font);
@@ -797,7 +841,7 @@ public final class HexEditorDialog extends JDialog {
 			for (int row = firstRow; row <= lastRow; row++) {
 				int y = row * lh;
 				int base = row * PER_ROW;
-				g.setColor(Color.BLACK);
+				g.setColor(fgColor);
 				g.drawString(String.format("%08X", base), 4, y + asc);
 				if (prg && base + PER_ROW > 2 && base >= 2) {
 					g.drawString(String.format("$%04X", (loadAddress() + base - 2) & 0xffff), memX() + 4, y + asc);
@@ -809,7 +853,7 @@ public final class HexEditorDialog extends JDialog {
 					}
 					boolean sel = i >= selFrom && i <= selTo && selFrom >= 0;
 					boolean diff = i >= saved.length || saved[i] != data[i];
-					var bg = sel ? selColor : diff ? changedColor : Color.WHITE;
+					var bg = sel ? selColor : diff ? changedColor : bgColor;
 					var hr = cellRect(i, false);
 					var tr = cellRect(i, true);
 					if (sel || diff) {
@@ -818,7 +862,7 @@ public final class HexEditorDialog extends JDialog {
 						g.fillRect(tr.x, tr.y, tr.width, tr.height - 1);
 					}
 					int v = data[i] & 0xff;
-					g.setColor(prg && i < 2 ? new Color(0x9A3B8A) : Color.BLACK);
+					g.setColor(prg && i < 2 ? prgColor : fgColor);
 					g.drawString(String.format("%02X", v), hr.x + cw / 2, y + asc);
 					drawChar(g, v, tr, bg);
 				}
@@ -837,14 +881,14 @@ public final class HexEditorDialog extends JDialog {
 			if (cursor <= data.length) {
 				var hr = cellRect(cursor, false);
 				var tr = cellRect(cursor, true);
-				g.setColor(new Color(0xD03A30));
+				g.setColor(cursorColor);
 				var active = textPane ? tr : hr;
 				var other = textPane ? hr : tr;
 				g.drawRect(active.x, active.y, active.width - 1, active.height - 2);
 				if (!textPane) {
 					g.fillRect(hr.x + cw / 2 + (lowNibble ? cw : 0), hr.y + lh - 4, cw, 2);
 				}
-				g.setColor(new Color(0x2F6FD6));
+				g.setColor(otherColor);
 				g.drawRect(other.x, other.y + lh - 4, other.width - 1, 1);
 			}
 			g.dispose();
@@ -852,12 +896,12 @@ public final class HexEditorDialog extends JDialog {
 
 		private void drawChar(Graphics2D g, int v, Rectangle r, Color bg) {
 			if (textMode == 0) {
-				g.setColor(Color.BLACK);
+				g.setColor(fgColor);
 				var s = v >= 0x20 && v < 0x7f ? String.valueOf((char) v) : ".";
 				g.drawString(s, r.x + (cw - fm.stringWidth(s)) / 2, r.y + fm.getAscent() + 2);
 			} else {
 				// glyphs of the computer's character ROM, black on white
-				C64.drawPetscii(g, v, r.x, r.y + 2, r.width, r.height - 4, Color.BLACK, bg, machine, textMode == 2);
+				C64.drawPetscii(g, v, r.x, r.y + 2, r.width, r.height - 4, fgColor, bg, machine, textMode == 2);
 			}
 		}
 
