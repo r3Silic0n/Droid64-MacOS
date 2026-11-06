@@ -95,10 +95,10 @@ public class MusicPlayerDialog extends JDialog {
 	private final JSlider seek = new JSlider(0, 300, 0);
 	private boolean seekAdjusting;
 	private final JLabel timeLabel = new JLabel("0:00");
-	private final JButton playButton = new JButton("Play");
-	private final JButton stopButton = new JButton("Stop");
-	private final JButton prevSong = new JButton("<");
-	private final JButton nextSong = new JButton(">");
+	private final JButton playButton = new JButton(TransportIcon.PLAY);
+	private final JButton stopButton = new JButton(TransportIcon.STOP);
+	private final JButton prevSong = new JButton(TransportIcon.PREVIOUS);
+	private final JButton nextSong = new JButton(TransportIcon.NEXT);
 	private final JLabel songLabel = new JLabel("1 / 1");
 	private final JSlider volume = new JSlider(0, 100, 70);
 	private final JComboBox<SidChip.Model> modelBox = new JComboBox<>(SidChip.Model.values());
@@ -304,6 +304,12 @@ public class MusicPlayerDialog extends JDialog {
 		transport.add(new JLabel("  Volume"));
 		volume.setPreferredSize(new Dimension(110, 24));
 		transport.add(volume);
+		prevSong.setToolTipText("Previous tune");
+		nextSong.setToolTipText("Next tune");
+		playButton.setToolTipText("Play");
+		stopButton.setToolTipText("Stop");
+		playButton.setFocusable(false);
+		stopButton.setFocusable(false);
 		playButton.addActionListener(e -> playPause());
 		stopButton.addActionListener(e -> stop());
 		volume.addChangeListener(e -> applyLive());
@@ -756,14 +762,20 @@ public class MusicPlayerDialog extends JDialog {
 
 	// ---- playback ----
 
+	/** The play button shows a pause symbol while the music is playing. */
+	private void setPlayIcon(boolean playing) {
+		playButton.setIcon(playing ? TransportIcon.PAUSE : TransportIcon.PLAY);
+		playButton.setToolTipText(playing ? "Pause" : "Play");
+	}
+
 	private void playPause() {
 		if (player != null) {
 			if (player.paused) {
 				player.paused = false;
-				playButton.setText("Pause");
+				setPlayIcon(true);
 			} else {
 				player.paused = true;
-				playButton.setText("Play");
+				setPlayIcon(false);
 			}
 			return;
 		}
@@ -803,7 +815,7 @@ public class MusicPlayerDialog extends JDialog {
 		var p = new Player(eng, tune, pal, (SidChip.Model) modelBox.getSelectedItem());
 		player = p;
 		applyLive();
-		playButton.setText("Pause");
+		setPlayIcon(true);
 		long len = knownLengthMs();
 		seek.setMaximum(len > 0 ? (int) ((len + 999) / 1000) : 300);
 		seek.setEnabled(true);
@@ -816,7 +828,7 @@ public class MusicPlayerDialog extends JDialog {
 		if (p != null) {
 			p.running = false;
 		}
-		playButton.setText("Play");
+		setPlayIcon(false);
 		timeLabel.setText("0:00");
 		seek.setValue(0);
 		seek.setMaximum(300);
