@@ -1014,6 +1014,15 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	 * @return data
 	 */
 	private byte[] getFileData(int fileNum) {
+		return getFileData(fileNum, false);
+	}
+
+	/**
+	 * @param fileNum file number in listing
+	 * @param quiet if true a file that cannot be read gives null and no error message (used by the picture viewer
+	 *              that steps through all entries, e.g. DEL files without data)
+	 */
+	private byte[] getFileData(int fileNum, boolean quiet) {
 		try {
 			if (imageLoaded) {
 				return diskImage.getFileData(fileNum);
@@ -1023,6 +1032,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 				return Files.readAllBytes(new File(getLocalFilename(fileNum)).toPath());
 			}
 		} catch (Exception e) {	//NOSONAR
+			if (quiet) {
+				return null;
+			}
 			GuiHelper.showException(mainPanel.getParent(), "Error", e, "Failed to get file data.");
 		}
 		return new byte[0];
@@ -1220,7 +1232,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			}
 			int start = Math.max(0, table.getSelectedRow());
 			mainPanel.appendConsole("Image view '" + names.get(start) + "'");
-			new ViewImagePanel(DroiD64.PROGNAME+" - Image view", mainPanel).show(names, i -> getFileData(i), start);
+			new ViewImagePanel(DroiD64.PROGNAME+" - Image view", mainPanel).show(names, i -> getFileData(i, true), start);
 		} catch (Exception e) {	//NOSONAR
 			GuiHelper.showException(mainPanel.getParent(), "Error", e, "Failed to view image.");
 		}
