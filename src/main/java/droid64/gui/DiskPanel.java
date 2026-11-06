@@ -1149,12 +1149,26 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		}
 	}
 
+	/** "my GAME disk" becomes "MyGameDisk": every word starts with a capital letter, the rest is lower case, no spaces. */
+	static String fileNameFromDiskName(String diskName) {
+		if (diskName == null) {
+			return "";
+		}
+		var sb = new StringBuilder();
+		for (var word : diskName.trim().split("\\s+")) {
+			if (!word.isEmpty()) {
+				sb.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1).toLowerCase());
+			}
+		}
+		return sb.toString();
+	}
+
 	protected void newDiskImage() {
 		mainPanel.appendConsole("New disk image.");
 		var result = new RenameDiskImagePanel(mainPanel).showDialog(DroiD64.PROGNAME+" - New disk");
 		if (result != null) {
 			mainPanel.formatConsole("New Diskname is: \"%s, %s\".", result.getDiskName(), result.getDiskID());
-			var defaultName = Setting.checkFileNameExtension(result.getDiskType(), result.isCompressedDisk(), result.getDiskName());
+			var defaultName = Setting.checkFileNameExtension(result.getDiskType(), result.isCompressedDisk(), fileNameFromDiskName(result.getDiskName()));
 			// start where the last new disk was saved, or in the user's home folder
 			var last = Setting.LAST_SAVE_DIR.getString();
 			var startDir = last != null && !last.isEmpty() && new File(last).isDirectory()

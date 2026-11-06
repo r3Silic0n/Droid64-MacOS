@@ -89,7 +89,7 @@ public class RenameDiskImagePanel extends JPanel {
 			idTextField.setText("");
 			cpmBox.setSelected(false);
 			compressedBox.setSelected(false);
-			diskTypeBox.setSelectedItem(null);
+			diskTypeBox.setSelectedItem(DiskImageType.D64);
 		} else {
 			nameTextField.setText(diskImage.getBam().getDiskName());
 			idTextField.setText(diskImage.getBam().getDiskId());
