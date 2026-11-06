@@ -198,8 +198,23 @@ public class SettingsPanel extends JPanel {
 		var tabPane = new JTabbedPane();
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_GUI), new JScrollPane(drawGuiPanel()));
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_VICE), new JScrollPane(drawVicePanel()));
-		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_FILES), new JScrollPane(drawFilesPanel()));
-		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_DATABASE), new JScrollPane(drawDatabasePanel()));
+		var filesAndDb = new JPanel(new BorderLayout());
+		var filesPart = drawFilesPanel();
+		filesAndDb.add(filesPart, BorderLayout.NORTH);
+		var dbPart = new JPanel(new BorderLayout());
+		dbPart.add(new javax.swing.JSeparator(), BorderLayout.NORTH);
+		var dbHeading = new JLabel(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_DATABASE));
+		dbHeading.setFont(dbHeading.getFont().deriveFont(Font.BOLD));
+		var dbTop = new JPanel(new BorderLayout());
+		dbTop.add(dbHeading, BorderLayout.WEST);
+		dbTop.setBorder(BorderFactory.createEmptyBorder(4, 2, 2, 0));
+		var dbInner = new JPanel(new BorderLayout());
+		dbInner.add(dbTop, BorderLayout.NORTH);
+		dbInner.add(drawDatabasePanel(), BorderLayout.CENTER);
+		dbPart.add(dbInner, BorderLayout.CENTER);
+		filesAndDb.add(dbPart, BorderLayout.CENTER);
+		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_FILES) + " / " + Utility.getMessage(Resources.DROID64_SETTINGS_TAB_DATABASE),
+				new JScrollPane(filesAndDb));
 
 		add(tabPane, BorderLayout.CENTER);
 
@@ -419,17 +434,6 @@ public class SettingsPanel extends JPanel {
 		GuiHelper.addToGridBag(1, 2, 1.0, 0.0, 1, gbc, guiPanel, extRemoval);
 		GuiHelper.addToGridBag(2, 2, 1.0, 0.0, 1, gbc, guiPanel, new JPanel());
 
-		addFields(3, Resources.DROID64_SETTINGS_EXT_D64, fileExtD64, fileExtD64gz, guiPanel, gbc);
-		addFields(4, Resources.DROID64_SETTINGS_EXT_D67, fileExtD67, fileExtD67gz, guiPanel, gbc);
-		addFields(5, Resources.DROID64_SETTINGS_EXT_D71, fileExtD71, fileExtD71gz, guiPanel, gbc);
-		addFields(6, Resources.DROID64_SETTINGS_EXT_D80, fileExtD80, fileExtD80gz, guiPanel, gbc);
-		addFields(7, Resources.DROID64_SETTINGS_EXT_D81, fileExtD81, fileExtD81gz, guiPanel, gbc);
-		addFields(8, Resources.DROID64_SETTINGS_EXT_D82, fileExtD82, fileExtD82gz, guiPanel, gbc);
-		addFields(9, Resources.DROID64_SETTINGS_EXT_D88, fileExtD88, fileExtD88gz, guiPanel, gbc);
-		addFields(10, Resources.DROID64_SETTINGS_EXT_T64, fileExtT64, fileExtT64gz, guiPanel, gbc);
-		addFields(11, Resources.DROID64_SETTINGS_EXT_LNX, fileExtLNX, fileExtLNXgz, guiPanel, gbc);
-
-		GuiHelper.addToGridBag(0, 12, 1.0, 0.8, 3, gbc, guiPanel, new JPanel());
 		return guiPanel;
 	}
 
