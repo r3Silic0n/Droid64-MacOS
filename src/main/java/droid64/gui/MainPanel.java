@@ -1335,7 +1335,7 @@ public class MainPanel implements Serializable {
 
 	public void setPluginButtonLabel(int num, String label) {
 		if (num < pluginButtons.length && pluginButtons[num] != null) {
-			pluginButtons[num].setText(label);
+			pluginButtons[num].setText("d64copy".equals(label) ? "OpenCBM" : label);
 		}
 	}
 

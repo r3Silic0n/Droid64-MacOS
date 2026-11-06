@@ -454,6 +454,7 @@ public enum Setting {
 				s.set(list);
 			}
 		});
+		migrateOpenCbmPlugin();
 		if (resetPlugins) {
 			SETTINGS_VERSION.set(4);
 		}
@@ -464,6 +465,28 @@ public enum Setting {
 			LOCAL_FONT_SIZE.set(12);
 			LOCAL_ROW_HEIGHT.set(18);
 			SETTINGS_VERSION.set(4);
+		}
+	}
+
+	/** A saved settings file may still hold the old "d64copy" plugin: it becomes the OpenCBM window entry. */
+	private static void migrateOpenCbmPlugin() {
+		var cmds = PLUGIN_COMMAND.getList();
+		if (cmds == null) {
+			return;
+		}
+		for (var i = 0; i < cmds.size(); i++) {
+			if ("d64copy".equals(cmds.get(i))) {
+				cmds.set(i, "opencbm");
+				setAt(PLUGIN_LABEL.getList(), i, "OpenCBM");
+				setAt(PLUGIN_DESCRIPTION.getList(), i, "OpenCBM: copy, format and control real Commodore drives");
+				setAt(PLUGIN_ARGUMENTS.getList(), i, "");
+			}
+		}
+	}
+
+	private static void setAt(List<String> list, int i, String value) {
+		if (list != null && i < list.size()) {
+			list.set(i, value);
 		}
 	}
 
