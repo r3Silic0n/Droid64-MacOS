@@ -160,7 +160,7 @@ public class ImageConvertDialog extends JDialog {
 		table.setForeground(fg);
 		table.setGridColor(bg);
 		table.setIntercellSpacing(new Dimension(0, 0));
-		table.setRowHeight(Math.max(16, Setting.ROW_HEIGHT.getInteger()));
+		table.setRowHeight(Math.max(4, Setting.ROW_HEIGHT.getInteger()));
 		table.setShowGrid(false);
 		table.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() {
 			private static final long serialVersionUID = 1L;
@@ -170,7 +170,7 @@ public class ImageConvertDialog extends JDialog {
 				var l = new JLabel(value != null ? value.toString() : "");
 				l.setOpaque(true);
 				// status and note are ordinary text, the rest uses the CBM font
-				l.setFont(col == 0 || col == 4 ? Setting.SYS_FONT.getFont() != null ? Setting.SYS_FONT.getFont().deriveFont(12f) : t.getFont() : t.getFont());
+				l.setFont(col == 0 || col == 4 ? Setting.SYS_FONT.getFont() != null ? Setting.SYS_FONT.getFont().deriveFont((float) Math.max(7, Math.min(11, Setting.ROW_HEIGHT.getInteger()))) : t.getFont() : t.getFont());
 				l.setForeground(t.getForeground());
 				l.setBackground(t.getBackground());
 				return l;

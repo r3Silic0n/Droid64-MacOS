@@ -215,6 +215,7 @@ public final class FtpDialog extends JDialog {
 		setPreferredSize(new Dimension(860, 600));
 		pack();
 		setLocationRelativeTo(mainPanel.getParent());
+		WindowBounds.remember(this, Setting.FTP_DIALOG_BOUNDS);
 
 		connectButton.addActionListener(e -> {
 			if (client != null) {
