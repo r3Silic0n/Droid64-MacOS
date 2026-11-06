@@ -44,8 +44,6 @@ import javax.swing.filechooser.FileFilter;
 import javax.swing.plaf.basic.BasicComboBoxRenderer;
 
 import droid64.d64.Utility;
-import droid64.db.DaoFactory;
-import droid64.db.DaoFactoryImpl;
 
 /**
  * <pre style='font-family:Sans,Arial,Helvetica'>
@@ -144,25 +142,12 @@ public class SettingsPanel extends JPanel {
 	private Font consoleFont = Setting.CONSOLE_FONT.getFont();
 
 
-	// Database settings
-	private final JCheckBox useJdbcCheckBox = new JCheckBox(Utility.getMessage(Resources.DROID64_SETTINGS_JDBC_USEDB));
-	private final JTextField jdbcDriver = new JTextField(Setting.JDBC_DRIVER.getString());
-	private final JTextField jdbcUrl = new JTextField(Setting.JDBC_URL.getString());
-	private final JTextField jdbcUser = new JTextField(Setting.JDBC_USER.getString());
-	private final JPasswordField jdbcPassword = new JPasswordField(Setting.JDBC_PASS.getString());
-	private final JFormattedTextField maxRows = SearchPanel.getNumericField(Setting.MAX_ROWS.getInteger(), 8);
-	private final JComboBox<String> limitTypeBox = new JComboBox<>(DaoFactory.getLimitNames());
-	private final List<String> jdbcDriverClasses = GuiHelper.getClassNames(java.sql.Driver.class);
-	private final JTextField excludeImageFiles = new JTextField(Setting.EXCLUDED_IMAGE_FILES.getString());
-
 	/** Colors */
 	private static final String[] COLORS = { "gray", "red", "green", "blue", "light-blue", "dark-grey", "cyan" };
 
-	private final JTextArea status = new JTextArea();
 
 	private static final String ARGUMENT_TOOLTIP = Utility.getMessage(Resources.PLUGIN_ARGUMENTS_TOOLTIP);
 
-	private static String sqlSetupScript = null;
 	private final MainPanel mainPanel;
 	private final String title;
 
@@ -201,18 +186,6 @@ public class SettingsPanel extends JPanel {
 		var filesAndDb = new JPanel(new BorderLayout());
 		var filesPart = drawFilesPanel();
 		filesAndDb.add(filesPart, BorderLayout.NORTH);
-		var dbPart = new JPanel(new BorderLayout());
-		dbPart.add(new javax.swing.JSeparator(), BorderLayout.NORTH);
-		var dbHeading = new JLabel(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_DATABASE));
-		dbHeading.setFont(dbHeading.getFont().deriveFont(Font.BOLD));
-		var dbTop = new JPanel(new BorderLayout());
-		dbTop.add(dbHeading, BorderLayout.WEST);
-		dbTop.setBorder(BorderFactory.createEmptyBorder(4, 2, 2, 0));
-		var dbInner = new JPanel(new BorderLayout());
-		dbInner.add(dbTop, BorderLayout.NORTH);
-		dbInner.add(drawDatabasePanel(), BorderLayout.CENTER);
-		dbPart.add(dbInner, BorderLayout.CENTER);
-		filesAndDb.add(dbPart, BorderLayout.CENTER);
 		tabPane.addTab("Advanced",
 				new JScrollPane(filesAndDb));
 
@@ -661,13 +634,6 @@ public class SettingsPanel extends JPanel {
 				.map(UIManager.LookAndFeelInfo::getClassName)
 				.orElse(Setting.DEFAULT_LOOK_AND_FEEL_CLASS));
 		Setting.LOCAL_ROW_HEIGHT.set(Integer.parseInt(localRowHeightSpinner.getValue().toString()));
-		Setting.USE_DB.set(useJdbcCheckBox.isSelected());
-		Setting.JDBC_DRIVER.set(jdbcDriver.getText());
-		Setting.JDBC_URL.set(jdbcUrl.getText());
-		Setting.JDBC_USER.set(jdbcUser.getText());
-		Setting.JDBC_PASS.set(String.valueOf(jdbcPassword.getPassword()));
-		Setting.JDBC_LIMIT_TYPE.set(limitTypeBox.getSelectedIndex());
-		Setting.EXCLUDED_IMAGE_FILES.set(excludeImageFiles.getText());
 		Setting.SYS_FONT.set(sysFont);
 		Setting.CBM_FONT.set(cbmFont);
 		Setting.CONSOLE_FONT.set(consoleFont);
@@ -693,12 +659,6 @@ public class SettingsPanel extends JPanel {
 		Setting.FILE_EXT_D88_GZ.set(fileExtD88gz.getText());
 		Setting.FILE_EXT_LNX_GZ.set(fileExtLNXgz.getText());
 		Setting.FILE_EXT_T64_GZ.set(fileExtT64gz.getText());
-
-		try {
-			Setting.MAX_ROWS.set(Integer.parseInt(maxRows.getText()));
-		} catch (NumberFormatException e) {
-			maxRows.setValue(25L);
-		}
 	}
 
 	/** Colour swatch that is an ordinary button of the current look and feel, with the colour as its icon. */
@@ -826,128 +786,6 @@ public class SettingsPanel extends JPanel {
 		return row + 1;
 	}
 
-	/**
-	 * Create the panel with database settings.
-	 *
-	 * @return JPanel
-	 */
-	private JPanel drawDatabasePanel() {
-		var dbPanel = new JPanel(new GridBagLayout());
-		var gbc = new GridBagConstraints();
-		gbc.fill = GridBagConstraints.HORIZONTAL;
-
-		useJdbcCheckBox.setSelected(Setting.USE_DB.getBoolean());
-		var testConnectionButton = new JButton(Utility.getMessage(Resources.DROID64_SETTINGS_JDBC_TEST));
-		status.setFont(new Font("Verdana", Font.PLAIN, status.getFont().getSize()));
-		status.setLineWrap(true);
-		status.setWrapStyleWord(true);
-		status.setEditable(false);
-		useJdbcCheckBox.addActionListener(ae -> {
-			boolean enabled = useJdbcCheckBox.isSelected();
-			jdbcDriver.setEnabled(enabled);
-			jdbcUrl.setEnabled(enabled);
-			jdbcUser.setEnabled(enabled);
-			jdbcPassword.setEnabled(enabled);
-			maxRows.setEnabled(enabled);
-			testConnectionButton.setEnabled(enabled);
-		});
-
-		testConnectionButton.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_JDBC_TEST_TOOLTIP));
-		testConnectionButton.addActionListener(ae -> {
-			var errStr = DaoFactoryImpl.testConnection(jdbcDriver.getText(), jdbcUrl.getText(), jdbcUser.getText(),
-					new String(jdbcPassword.getPassword()));
-			status.setText(errStr == null ? Utility.getMessage(Resources.DROID64_SETTINGS_OK) : errStr);
-		});
-
-		boolean jdbcEnabled = useJdbcCheckBox.isSelected();
-		jdbcDriver.setEnabled(jdbcEnabled);
-		jdbcUrl.setEnabled(jdbcEnabled);
-		jdbcUser.setEnabled(jdbcEnabled);
-		jdbcPassword.setEnabled(jdbcEnabled);
-		maxRows.setEnabled(jdbcEnabled);
-		testConnectionButton.setEnabled(jdbcEnabled);
-
-		limitTypeBox.setToolTipText(Utility.getMessage(Resources.DROID64_SETTINGS_JDBC_LIMIT_TOOLTIP));
-		limitTypeBox.setEditable(false);
-		limitTypeBox.setSelectedIndex(0);
-		limitTypeBox.setSelectedIndex(Setting.JDBC_LIMIT_TYPE.getInteger() < DaoFactory.getLimitNames().length
-				? Setting.JDBC_LIMIT_TYPE.getInteger()
-				: 0);
-
-		excludeImageFiles.setToolTipText(Utility.getResource(Resources.DROID64_SETTINGS_EXCLUDE_IMAGE_FILES_TOOLTIP));
-
-		var jdbcDriverBrowse = new JButton(BROWSELABEL);
-		jdbcDriverBrowse.setEnabled(!jdbcDriverClasses.isEmpty());
-		jdbcDriverBrowse.addActionListener(e -> browseJdbcDrivers());
-
-		if (jdbcDriver.getText().isEmpty() && jdbcDriverClasses.size() == 1) {
-			jdbcDriver.setText(jdbcDriverClasses.get(0));
-		}
-
-		var sqlString = Utility.getMessage("jdbc.feature.message", Utility.getMessage(Resources.JDBC_MYSQL_URL),
-				Utility.getMessage(Resources.JDBC_POSTGRESQL_URL));
-		var sql = getSqlSetupScript(mainPanel);
-		var viewSqlButton = new JButton(Utility.getMessage(Resources.DROID64_SETTINGS_JDBC_SQL));
-		viewSqlButton.addActionListener(
-				ae -> new TextViewPanel(mainPanel).show(sql, "DroiD64", "SQL database setup", Utility.MIMETYPE_TEXT));
-
-		var messageTextArea = new JTextArea(10, 45);
-		messageTextArea.setBackground(new Color(230, 230, 230));
-		messageTextArea.setEditable(false);
-		messageTextArea.setWrapStyleWord(true);
-		messageTextArea.setLineWrap(true);
-		messageTextArea.setText(sqlString);
-		messageTextArea.setCaretPosition(0);
-
-		var buttonPanel = new JPanel();
-		buttonPanel.add(viewSqlButton);
-		buttonPanel.add(testConnectionButton);
-		buttonPanel.add(new JPanel());
-
-		GuiHelper.addToGridBag(0, 0, 0.0, 0.0, 1, gbc, dbPanel, new JPanel());
-		GuiHelper.addToGridBag(1, 0, 0.5, 0.0, 1, gbc, dbPanel, useJdbcCheckBox);
-		GuiHelper.addToGridBag(2, 0, 0.0, 0.0, 1, gbc, dbPanel, new JPanel());
-
-		var p = new JPanel(new BorderLayout());
-		p.add(jdbcDriver, BorderLayout.CENTER);
-		p.add(jdbcDriverBrowse, BorderLayout.EAST);
-
-		addField(1, Resources.DROID64_SETTINGS_JDBC_CLASS, p, dbPanel, gbc);
-		addField(2, Resources.DROID64_SETTINGS_JDBC_URL, jdbcUrl, dbPanel, gbc);
-		addField(3, Resources.DROID64_SETTINGS_JDBC_USER, jdbcUser, dbPanel, gbc);
-		addField(4, Resources.DROID64_SETTINGS_JDBC_PASS, jdbcPassword, dbPanel, gbc);
-		addField(5, Resources.DROID64_SETTINGS_JDBC_ROWS, maxRows, dbPanel, gbc);
-		addField(6, Resources.DROID64_SETTINGS_JDBC_LIMIT, limitTypeBox, dbPanel, gbc);
-
-		addField(7, Resources.DROID64_SETTINGS_EXCLUDE_IMAGE_FILES, excludeImageFiles, dbPanel, gbc);
-
-		GuiHelper.addToGridBag(0, 8, 0.0, 0.0, 1, gbc, dbPanel, new JPanel());
-		GuiHelper.addToGridBag(1, 8, 0.5, 0.0, 2, gbc, dbPanel, buttonPanel);
-
-		addField(9, Resources.DROID64_SETTINGS_JDBC_STATUS, status, dbPanel, gbc);
-
-		GuiHelper.addToGridBag(0, 10, 0.0, 0.0, 1, gbc, dbPanel, new JPanel());
-		gbc.fill = GridBagConstraints.BOTH;
-		GuiHelper.addToGridBag(1, 10, 0.5, 0.9, 1, gbc, dbPanel, new JScrollPane(messageTextArea));
-
-		return dbPanel;
-	}
-
-	private void browseJdbcDrivers() {
-		var classModel = new DefaultListModel<String>();
-		jdbcDriverClasses.forEach(classModel::addElement);
-		var classList = new JList<String>(classModel);
-		classList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		classList.setSelectedValue(Setting.JDBC_DRIVER.getString(), true);
-		if (JOptionPane.OK_OPTION == JOptionPane.showConfirmDialog(this, new JScrollPane(classList),
-				"Choose JDBC driver", JOptionPane.OK_CANCEL_OPTION)) {
-			var drv = classList.getSelectedValue();
-			if (drv != null) {
-				jdbcDriver.setText(drv);
-			}
-		}
-	}
-
 
 	private JTextArea getTextArea(String toolTip) {
 		var area = new JTextArea(4, 20);
@@ -969,22 +807,5 @@ public class SettingsPanel extends JPanel {
 		}
 		field.setText(Utility.EMPTY);
 		return field;
-	}
-
-	private static String getSqlSetupScript(final MainPanel mainPanel) {
-		if (sqlSetupScript == null) {
-			try (var in = SettingsPanel.class.getResourceAsStream("/setup_database.sql");
-					var input = new BufferedReader(new InputStreamReader(in))) {
-				var buf = new StringBuilder();
-				for (var line = input.readLine(); line != null; line = input.readLine()) {
-					buf.append(line);
-					buf.append('\n');
-				}
-				sqlSetupScript = buf.toString();
-			} catch (IOException e) { // NOSONAR
-				mainPanel.appendConsole("Failed to find SQL setup script.\n" + e.getMessage());
-			}
-		}
-		return sqlSetupScript;
 	}
 }

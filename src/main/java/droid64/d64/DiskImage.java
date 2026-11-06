@@ -8,8 +8,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
-import droid64.db.Disk;
-import droid64.db.DiskFile;
 import droid64.gui.BAMPanel.BamTrack;
 import droid64.gui.ConsoleStream;
 import droid64.gui.Setting;
@@ -556,25 +554,6 @@ public abstract class DiskImage implements Serializable {
 		if ( ((cbmFile.getSizeInBytes()-2) % 254) >0 ) {
 			cbmFile.setSizeInBlocks(cbmFile.getSizeInBlocks()+1);
 		}
-	}
-
-	/**
-	 * Get <code>Disk</code> instance of current image. This is used when saving to database.
-	 * @return Disk
-	 */
-	public Disk getDisk() {
-		var disk = new Disk();
-		disk.setLabel(Utility.rinseCtrlChars(getBam().getDiskName()));
-		disk.setImageType(imageFormat);
-		disk.setErrors(errors);
-		disk.setWarnings(warnings);
-		for (int filenumber = 0; filenumber <= getFilesUsedCount() - 1;	filenumber++) {
-			var cf =  getCbmFile(filenumber);
-			if (cf != null) {
-				disk.getDiskFiles().add(new DiskFile(cf, filenumber));
-			}
-		}
-		return disk;
 	}
 
 	/**

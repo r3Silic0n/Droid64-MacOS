@@ -64,8 +64,6 @@ import droid64.d64.DiskImageType;
 import droid64.d64.FileType;
 import droid64.d64.Utility;
 import droid64.d64.ValidationError;
-import droid64.db.DaoFactory;
-import droid64.db.DatabaseException;
 
 /**<pre style='font-family:sans-serif;'>
  * Created on 23.06.2004<br>
@@ -806,24 +804,6 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		if (imageLoaded) {
 			diskImage.readBAM();
 			diskImage.readDirectory();
-			if (Boolean.TRUE.equals(Setting.USE_DB.getBoolean())) {
-				var disk = diskImage.getDisk();
-				var f = diskImage.getFile();
-				var excludePattern = Utility.isEmpty(Setting.EXCLUDED_IMAGE_FILES.getString()) ? null : Pattern.compile(Setting.EXCLUDED_IMAGE_FILES.getString());
-				if (excludePattern == null || !excludePattern.matcher(f.getAbsolutePath()).matches()) {
-					var p = f.getAbsoluteFile().getParentFile();
-					var d = p != null ? p.getAbsolutePath() : null;
-					disk.setFilePath(d);
-					disk.setFileName(f.getName());
-					disk.setImageType(diskImage.getImageFormat());
-					disk.setHostName(Utility.getHostName());
-					try {
-						DaoFactory.getDaoFactory().getDiskDao().save(disk);
-					} catch (DatabaseException e) {	//NOSONAR
-						GuiHelper.showException(mainPanel.getParent(), "Error", e, "Failed to update database.");
-					}
-				}
-			}
 		} else {
 			mainPanel.appendConsole("updateImageFile: no image loaded");
 		}
@@ -1712,6 +1692,47 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 	public void setOtherDiskPanelObject ( DiskPanel otherOne ) {
 		otherDiskPanel = otherOne;
+	}
+
+	/**
+	 * Open an image of the catalog, in this list, and select a file of it.
+	 * @param location image file, or the zip file that holds the image
+	 * @param inner name of the image inside the zip file, or null
+	 * @param fileName name of the file to select, or null
+	 */
+	public void openCatalogItem(File location, String inner, String fileName) {
+		try {
+			if (inner == null) {
+				openDiskImage(location, true);
+			} else {
+				loadZipFile(location);
+				for (int r = 0; r < table.getRowCount(); r++) {
+					if (inner.equals(String.valueOf(table.getValueAt(r, 1)))) {
+						doubleClickedZipFile(inner, r);
+						break;
+					}
+				}
+			}
+		} catch (CbmException | RuntimeException e) {
+			GuiHelper.showException(mainPanel.getParent(), "Load error", e, "Failed to load disk image.");
+			return;
+		}
+		if (fileName != null && imageLoaded) {
+			javax.swing.SwingUtilities.invokeLater(() -> {
+				for (int r = 0; r < table.getRowCount(); r++) {
+					var cell = String.valueOf(table.getValueAt(r, 2)).trim();
+					if (cell.length() >= 2 && cell.startsWith("\"") && cell.endsWith("\"")) {
+						cell = cell.substring(1, cell.length() - 1);
+					}
+					if (cell.trim().equalsIgnoreCase(fileName.trim())) {
+						table.setRowSelectionInterval(r, r);
+						table.scrollRectToVisible(table.getCellRect(r, 0, true));
+						table.requestFocus();
+						break;
+					}
+				}
+			});
+		}
 	}
 
 	public void openDiskImage(File file, boolean updateList) {

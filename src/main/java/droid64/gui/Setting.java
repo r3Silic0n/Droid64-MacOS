@@ -78,6 +78,7 @@ public enum Setting {
 	OPENCBM_DEVICE("opencbm_device",             ParameterType.STRING,           "8"),
 	OPENCBM_TRANSFER("opencbm_transfer",         ParameterType.STRING,           "auto"),
 	SECTOR_EDITOR_BOUNDS("sector_editor_bounds", ParameterType.STRING,           Utility.EMPTY),
+	CATALOG_BOUNDS("catalog_bounds", ParameterType.STRING,                    Utility.EMPTY),
 	FTP_DIALOG_BOUNDS("ftp_dialog_bounds", ParameterType.STRING,                 Utility.EMPTY),
 	OPENCBM_DIR("opencbm_dir",                   ParameterType.STRING,           Utility.EMPTY),
 	UPDATE_AUTO("update_auto",                   ParameterType.BOOLEAN,          Boolean.TRUE),
@@ -91,17 +92,9 @@ public enum Setting {
 	REMEMBER_WINDOW("remember_window",           ParameterType.BOOLEAN,          Boolean.TRUE),
 	WINDOW_BOUNDS("window_bounds",               ParameterType.STRING,           Utility.EMPTY),
 	WINDOW("window",                             ParameterType.STRING,           Utility.EMPTY),
-	JDBC_DRIVER("jdbc_driver",                   ParameterType.STRING,           Setting.JDBC_DEFAULT_DRIVER),
-	JDBC_URL("jdbc_url",                         ParameterType.STRING,           Setting.JDBC_DEFAULT_URL),
-	JDBC_USER("jdbc_user",                       ParameterType.STRING,           Setting.DROID64),
-	JDBC_PASS("jdbc_password",                   ParameterType.STRING,           Setting.JDBC_DEFAULT_PASS),
-	JDBC_LIMIT_TYPE("jdbc_limit_type",           ParameterType.INTEGER,          Integer.valueOf(0)),
-	EXCLUDED_IMAGE_FILES("excluded_image_files", ParameterType.STRING,           null),
-	MAX_ROWS("max_rows",                         ParameterType.INTEGER,          Integer.valueOf(25)),
 	ROW_HEIGHT("row_height",                     ParameterType.INTEGER,          Integer.valueOf(9)),
 	SETTINGS_VERSION("settings_version",         ParameterType.INTEGER,          Integer.valueOf(4)),
 	LOCAL_ROW_HEIGHT("local_row_height",         ParameterType.INTEGER,          Integer.valueOf(18)),
-	USE_DB("use_database",                       ParameterType.BOOLEAN,          Boolean.FALSE),
 	LOOK_AND_FEEL("look_and_feel",               ParameterType.STRING,           "javax.swing.plaf.metal.MetalLookAndFeel"),
 	PLUGIN_COMMAND("plugin_command",             ParameterType.INDEXED_STRING,   Utility.makeList( "x64sc", "x128", "xplus4", "cbmctrl", "opencbm", "x64sc", "x64sc", "xvic" )),
 	PLUGIN_ARGUMENTS("plugin_arguments",         ParameterType.INDEXED_STRING,   Utility.makeList( Setting.VICE_PLUGIN_ARGS, Setting.VICE_PLUGIN_ARGS, Setting.VICE_PLUGIN_ARGS, "dir 8", "{Image} 8", "-fs8convertp00 {Files}", "-fs8 {Image}", Setting.VICE_PLUGIN_ARGS )),
@@ -422,6 +415,11 @@ public enum Setting {
 	}
 	private static File getConfigFile() {
 		return new File ((USER_HOME != null ? USER_HOME + File.separator : "") + DEFAULT_SETTING_FILE_NAME);
+	}
+
+	/** @return file of the disk / tape catalog */
+	public static File getCatalogFile() {
+		return new File ((USER_HOME != null ? USER_HOME + File.separator : "") + ".droid64_catalog.gz");
 	}
 
 	public static File getBookmarkFile() {

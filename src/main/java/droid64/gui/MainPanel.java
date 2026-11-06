@@ -58,10 +58,6 @@ import droid64.d64.CbmException;
 import droid64.d64.DiskImage;
 import droid64.d64.DiskImageType;
 import droid64.d64.Utility;
-import droid64.db.DaoFactory;
-import droid64.db.DaoFactoryImpl;
-import droid64.db.DatabaseException;
-import droid64.db.DiskList;
 
 /**<pre>
  * Created on 21.06.2004
@@ -100,8 +96,7 @@ public class MainPanel implements Serializable {
 	/** Right disk panel */
 	private final DiskPanel diskPanel2;
 	/** True when scanning for disk images is running. */
-	private boolean scannerActive = false;
-	private final transient HashMap<Object, Object> colorHashMap = new HashMap<>();
+		private final transient HashMap<Object, Object> colorHashMap = new HashMap<>();
 	/** The position of the divider in the splitPane. */
 	private int dividerLoc = -1;
 	/** The size of the divider in the splitPane. */
@@ -699,7 +694,7 @@ public class MainPanel implements Serializable {
 		});
 		searchButton = createButton(ActionButton.SEARCH_BUTTON, event -> {
 			if (searchButton.getActionCommand().equals(event.getActionCommand())) {
-				new SearchPanel(DroiD64.PROGNAME + " - Search", this).showDialog();
+				CatalogDialog.show(this);
 			}
 		});
 	}
@@ -882,25 +877,11 @@ public class MainPanel implements Serializable {
 	 */
 	private JMenu createSearchMenu(final JFrame parent) {
 		var mainPanel = this;
-		searchMenu.setMnemonic('S');
+		searchMenu.setMnemonic('C');
 
-		var searchMenuItem = new JMenuItem("Search...", 's');
-		searchMenu.add (searchMenuItem);
-		var scanMenuItem = new JMenuItem("Scan for disk images...", 'i');
-		searchMenu.add (scanMenuItem);
-		var syncMenuItem = new JMenuItem("Sync database and files", 'y');
-		searchMenu.add (syncMenuItem);
-		var exportMenuItem = new JMenuItem("Export database to XML..", 'e');
-		searchMenu.add (exportMenuItem);
-
-		searchMenuItem.addActionListener(ae -> new SearchPanel(DroiD64.PROGNAME+" - Search", mainPanel).showDialog());
-		scanMenuItem.addActionListener(ae -> showScanForImages(parent));
-		syncMenuItem.addActionListener(ae -> syncDatabase());
-		exportMenuItem.addActionListener(ae -> exportDatabase());
-
-		searchMenu.setEnabled(Setting.USE_DB.getBoolean());
-		searchMenu.setToolTipText(Boolean.TRUE.equals(Setting.USE_DB.getBoolean()) ? null : "You must configure and enable database to use search.");
-		searchMenu.setVisible(Setting.USE_DB.getBoolean());
+		var searchMenuItem = new JMenuItem("Open catalog...", 'c');
+		searchMenu.add(searchMenuItem);
+		searchMenuItem.addActionListener(ae -> CatalogDialog.show(mainPanel));
 		return searchMenu;
 	}
 
@@ -1002,102 +983,6 @@ public class MainPanel implements Serializable {
 		doSettings(parent);
 	}
 
-	/**
-	 * Recursively search a folder for D64 images.
-	 */
-	private synchronized void showScanForImages(JFrame parent) {
-		if (scannerActive) {
-			GuiHelper.showErrorMessage(parent, "Scan failed", "Disk scanner is already active.");
-		} else {
-			File dir = chooseScanDirectory();
-			if (dir != null) {
-				var excludePattern = Utility.isEmpty(Setting.EXCLUDED_IMAGE_FILES.getString()) ? null : Pattern.compile(Setting.EXCLUDED_IMAGE_FILES.getString());
-				appendConsole("Scan for disk images in "+dir);
-				var scanner = new Thread() {
-					@Override
-					public void run() {
-						try {
-							int numDisks = scanForD64Files(dir, excludePattern);
-							GuiHelper.showInfoMessage(parent, "Scan completed", "Done scanning.%nFound %d disk images in %s.",numDisks, dir );
-						} finally {
-							scannerActive = false;
-						}
-					}
-				};
-				scannerActive = true;
-				scanner.start();
-			}
-		}
-	}
-
-	private File chooseScanDirectory() {
-		if (NativeFileDialog.IS_MAC) {
-			return NativeFileDialog.choose(parent, "Choose directory to recursively scan for images",
-					Setting.DEFAULT_IMAGE_DIR.getFile(), null, false, true, null);
-		}
-		var chooser = new JFileChooser(Setting.DEFAULT_IMAGE_DIR.getFile());
-		chooser.setToolTipText("Select directory to start scanning for disk images in.");
-		chooser.setDialogTitle("Choose directory to recursively scan for images");
-		chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-		chooser.setMultiSelectionEnabled(false);
-		return chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile() : null;
-	}
-
-	/**
-	 * Get all stored disks from database, and verify that files still exists in file system.
-	 */
-	private void syncDatabase() {
-		try {
-			var myHostName = Utility.getHostName();
-			var map = DaoFactory.getDaoFactory().getDiskDao().getAllDisks(false)
-				.filter(d -> d.getHostName() == null || d.getHostName().equals(myHostName))
-				.map(disk -> {
-					// map from disk to boolean which is true if it was deleted
-					var f = new File(disk.getFilePath() + File.separator + disk.getFileName());
-					if (!f.exists() || !f.isFile()) {
-						try {
-							appendConsole("Removing info for " + f.getPath());
-							disk.setDelete();
-							DaoFactory.getDaoFactory().getDiskDao().delete(disk);
-							return Boolean.TRUE;
-						} catch (DatabaseException ignored) { /* ignored */ }
-					}
-					return Boolean.FALSE;
-				})
-				.collect(Collectors.groupingBy(b -> b, Collectors.counting()));
-			GuiHelper.showInfoMessage(parent, "Sync completed", "Sync done.%nRemoved %d of %d disk(s) from database.",
-					Optional.ofNullable(map.get(true)).orElse(0L), Optional.ofNullable(map.get(false)).orElse(0L));
-		} catch (DatabaseException e) {	//NOSONAR
-			GuiHelper.showException(parent, "Sync failed", e, "Sync failed.");
-		}
-	}
-
-	private File chooseXmlExportFile() {
-		if (NativeFileDialog.IS_MAC) {
-			return NativeFileDialog.choose(parent, "Export database to XML", Setting.DEFAULT_IMAGE_DIR.getFile(), "droid64.xml", true, false, null);
-		}
-		var chooser = new JFileChooser(Setting.DEFAULT_IMAGE_DIR.getFile());
-		chooser.setToolTipText("Select XML file.");
-		chooser.setDialogTitle("Export database to XML");
-		chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-		chooser.setMultiSelectionEnabled(false);
-		chooser.setFileFilter(new FileNameExtensionFilter("XML file", "xml"));
-		return chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile() : null;
-	}
-
-	private void exportDatabase() {
-		try {
-			File f = chooseXmlExportFile();
-			if (f != null) {
-				appendConsole("Exporting database to " + f);
-				var count = DiskList.export(f);
-				appendConsole("Exported database with " + count + " disk images.");
-			}
-		} catch (DatabaseException | OutOfMemoryError e) {	//NOSONAR
-			GuiHelper.showException(parent, "Export failed", e, "Export failed.");
-		}
-	}
-
 	/** Applies the look and feel of the settings at once (used while the settings window is open). */
 	public void applyLookAndFeel() {
 		setLookAndFeel(parent, Setting.LOOK_AND_FEEL.getString());
@@ -1109,22 +994,10 @@ public class MainPanel implements Serializable {
 	 */
 	private void doSettings(JFrame parent ) {
 		setLookAndFeel(parent, Setting.LOOK_AND_FEEL.getString());
-		searchMenu.setEnabled(Setting.USE_DB.getBoolean());
-		searchMenu.setVisible(Setting.USE_DB.getBoolean());
 		setDefaultFonts();
 		consoleText.setFont(Setting.CONSOLE_FONT.getFont());
 		bookmarkBar.setVisible(Boolean.TRUE.equals(Setting.BOOKMARK_BAR.getBoolean()));
 		hideConsole(Setting.HIDECONSOLE.getBoolean());
-
-		if (Boolean.TRUE.equals(Setting.USE_DB.getBoolean())) {
-			try {
-				DaoFactoryImpl.initialize(Setting.JDBC_DRIVER.getString(), Setting.JDBC_URL.getString(),
-						Setting.JDBC_USER.getString(), Setting.JDBC_PASS.getString(),
-						Setting.MAX_ROWS.getInteger(), Setting.JDBC_LIMIT_TYPE.getInteger());
-			} catch (DatabaseException e) {	//NOSONAR
-				appendConsole("Load settings failed: "+e.getMessage());
-			}
-		}
 	}
 
 	/** Re-apply fonts, row heights and column widths of both lists (used for live settings preview). */
@@ -1306,55 +1179,6 @@ public class MainPanel implements Serializable {
 			// never start smaller than the default height, so both file lists and the console are readable
 			frame.setSize(splits[0], Math.min(Math.max(splits[1], 700), usable.height));
 			frame.setLocation(splits[2], splits[3]);
-		}
-	}
-
-	/**
-	 * Recursively scan dir for D64 images and add to database.
-	 * @param dir directory to start searching in.
-	 * @param excludePattern the regexp
-	 * @return number of found disk images
-	 */
-	protected int scanForD64Files(File dir, Pattern excludePattern) {
-		if (dir == null || dir.getName().startsWith(".")) {
-			return 0;
-		}
-
-		appendConsole("Scanning " + dir);
-		int diskCount = 0;
-		try (var stream = Files.newDirectoryStream(dir.toPath(), p -> !p.getFileName().startsWith("."))) {
-			Stream.Builder<Path> builder = Stream.builder();
-			stream.forEach(builder::add);
-			var files = builder.build().sorted().map(Path::toFile).collect(Collectors.toList());
-			for (var file : files) {
-				if (file.isDirectory()) {
-					diskCount += scanForD64Files(file, excludePattern);
-				} else if (file.isFile() && Setting.getDiskImageType(file) != DiskImageType.UNDEFINED
-						&& (excludePattern == null || !excludePattern.matcher(file.getAbsolutePath()).matches())) {
-					saveDiskToDatabase(file, dir);
-					diskCount++;
-				}
-			}
-			return diskCount;
-		} catch (IOException e) {
-			appendConsole("Error: " + e.getMessage());
-			return diskCount;
-		}
-	}
-
-	private void saveDiskToDatabase(File file, File dir) {
-		try {
-			var diskImage =  DiskImage.getDiskImage(file, consoleStream);
-			diskImage.readBAM();
-			diskImage.readDirectory();
-			var disk = diskImage.getDisk();
-			disk.setFilePath(dir.getAbsolutePath());
-			disk.setFileName(file.getName());
-			disk.setHostName(Utility.getHostName());
-			DaoFactory.getDaoFactory().getDiskDao().save(disk);
-			appendConsole("Saved info for " + file);
-		} catch (DatabaseException | CbmException e) {	//NOSONAR
-			appendConsole(file +" : "+e.getMessage());
 		}
 	}
 
