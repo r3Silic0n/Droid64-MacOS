@@ -1061,7 +1061,18 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			};
 		}
 		mainPanel.appendConsole("Hex edit '" + name + "'" + (saver == null ? " (read only)" : ""));
-		HexEditorDialog.show(mainPanel, name, data, prg, saver);
+		HexEditorDialog.show(mainPanel, name, data, prg, machineOfFile(data), saver);
+	}
+
+	/** The computer a file is for: from its load address, else the one of the disk image, else the C64. */
+	private C64.Machine machineOfFile(byte[] data) {
+		if (data != null && data.length >= 4) {
+			int load = (data[0] & 0xff) | (data[1] & 0xff) << 8;
+			if (load == 0x0801 || load == 0x1001 || load == 0x1201 || load == 0x1C01 || load == 0x0401) {
+				return MachineDetector.detect(data, load);
+			}
+		}
+		return imageLoaded && diskMachine != null ? diskMachine : C64.Machine.C64;
 	}
 
 	/** @return null when saved, otherwise the error message */

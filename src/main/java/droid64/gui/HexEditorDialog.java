@@ -66,6 +66,7 @@ public final class HexEditorDialog extends JDialog {
 	private boolean textPane;
 	private int anchor = -1;
 	private boolean insertMode;
+	private C64.Machine machine = C64.Machine.C64;
 	private int textMode;	// 0 ASCII, 1 C64 upper case, 2 C64 lower case
 	private String lastFind = "";
 	private int lastFindKind;
@@ -85,14 +86,15 @@ public final class HexEditorDialog extends JDialog {
 	 * @param isPrg true if the first two bytes are a load address
 	 * @param saver writes the data back, null makes the editor read only
 	 */
-	public static void show(MainPanel mainPanel, String name, byte[] content, boolean isPrg, Saver saver) {
-		var d = new HexEditorDialog(mainPanel, name, content, isPrg, saver);
+	public static void show(MainPanel mainPanel, String name, byte[] content, boolean isPrg, C64.Machine machine, Saver saver) {
+		var d = new HexEditorDialog(mainPanel, name, content, isPrg, machine, saver);
 		d.setVisible(true);
 	}
 
-	private HexEditorDialog(MainPanel mainPanel, String name, byte[] content, boolean isPrg, Saver saver) {
+	private HexEditorDialog(MainPanel mainPanel, String name, byte[] content, boolean isPrg, C64.Machine machine, Saver saver) {
 		super(mainPanel.getParent(), "Hex edit", ModalityType.MODELESS);
 		this.saver = saver;
+		this.machine = machine != null ? machine : C64.Machine.C64;
 		this.prg = isPrg && content.length >= 2;
 		this.fileName = name;
 		this.data = content.clone();
@@ -145,6 +147,16 @@ public final class HexEditorDialog extends JDialog {
 		tools.add(new JLabel("Characters"));
 		modeBox.setFocusable(false);
 		tools.add(modeBox);
+		var machineBox = new JComboBox<>(C64.Machine.values());
+		machineBox.setSelectedItem(this.machine);
+		machineBox.addActionListener(e -> {
+			this.machine = (C64.Machine) machineBox.getSelectedItem();
+			canvas.repaint();
+			canvas.requestFocusInWindow();
+		});
+		machineBox.setFocusable(false);
+		tools.add(new JLabel("Computer"));
+		tools.add(machineBox);
 
 		scroll = new JScrollPane(canvas);
 		scroll.getVerticalScrollBar().setUnitIncrement(canvas.lineHeight());
@@ -728,16 +740,17 @@ public final class HexEditorDialog extends JDialog {
 		@Override
 		protected void paintComponent(Graphics g0) {
 			var g = (Graphics2D) g0.create();
-			g.setColor(getBackground());
+			g.setColor(machine.background);
 			g.fillRect(0, 0, getWidth(), getHeight());
 			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 			g.setFont(font);
 			var clip = g.getClipBounds();
 			int firstRow = Math.max(0, (clip.y - PAD) / lh);
 			int lastRow = Math.min(rows() - 1, (clip.y + clip.height - PAD) / lh);
-			var addrColor = new Color(0x6a707a);
-			var selColor = new Color(0xB9D3FF);
-			var changedColor = new Color(0xFFE0B0);
+			var fg = machine.foreground;
+			var addrColor = machine.mix(0.6);
+			var selColor = machine.mix(0.5);
+			var changedColor = machine.mix(0.2);
 			int selFrom = hasSelection() ? selStart() : -1;
 			int selTo = hasSelection() ? selEnd() : -1;
 			for (int row = firstRow; row <= lastRow; row++) {
@@ -765,16 +778,16 @@ public final class HexEditorDialog extends JDialog {
 						continue;
 					}
 					int v = data[i] & 0xff;
-					g.setColor(prg && i < 2 ? new Color(0x9A3B8A) : Color.BLACK);
+					g.setColor(prg && i < 2 ? machine.mix(0.6) : fg);
 					g.drawString(String.format("%02X", v), hexCol(col), y + fm.getAscent() + 1);
-					drawChar(g, v, tr, sel ? selColor : diff ? changedColor : getBackground());
+					drawChar(g, v, tr, sel ? selColor : diff ? changedColor : machine.background, fg);
 				}
 			}
 			// cursor
 			if (cursor <= data.length) {
 				var hr = cellRect(cursor, false);
 				var tr = cellRect(cursor, true);
-				g.setColor(new Color(0xD03A30));
+				g.setColor(machine.foreground);
 				var active = textPane ? tr : hr;
 				var other = textPane ? hr : tr;
 				g.drawRect(active.x - 1, active.y, textPane ? active.width : active.width, active.height - 1);
@@ -783,22 +796,21 @@ public final class HexEditorDialog extends JDialog {
 				} else if (!textPane) {
 					g.fillRect(hr.x, hr.y + lh - 3, cw, 2);
 				}
-				g.setColor(new Color(0x2F6FD6));
+				g.setColor(machine.mix(0.6));
 				g.drawRect(other.x, other.y + lh - 3, other.width, 1);
 			}
 			g.dispose();
 		}
 
-		private void drawChar(Graphics2D g, int v, Rectangle r, Color bg) {
+		private void drawChar(Graphics2D g, int v, Rectangle r, Color bg, Color fg) {
 			if (textMode == 0) {
-				g.setColor(Color.BLACK);
+				g.setColor(fg);
 				var s = v >= 0x20 && v < 0x7f ? String.valueOf((char) v) : "·";
 				g.drawString(s, r.x, r.y + fm.getAscent() + 1);
 			} else {
 				// C64 character ROM glyphs, dark on light like the rest of the editor
-				var machine = C64.Machine.C64;
 				var oldHint = g.getRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING);
-				C64.drawPetscii(g, v, r.x, r.y + 1, r.width, r.height - 2, Color.BLACK, bg, machine, textMode == 2);
+				C64.drawPetscii(g, v, r.x, r.y + 1, r.width, r.height - 2, fg, bg, machine, textMode == 2);
 				g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, oldHint);
 			}
 		}
