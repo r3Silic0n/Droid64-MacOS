@@ -29,6 +29,7 @@ import javax.swing.SwingUtilities;
 
 import droid64.d64.CbmException;
 import droid64.d64.DiskImage;
+import droid64.d64.DiskImageType;
 
 /**
  * Draw directory art with PETSCII characters and write it to a disk image as directory entries.
@@ -42,13 +43,16 @@ public class DirArtEditorDialog extends JDialog {
 	private static final int GAP = 14;
 	private static final int ART_COL = 5;
 	private static final int LINE_COLS = 30;
+	/** First screen column of the disk ID characters in the header line (after the closing quote and a space). */
+	private static final int ID_COL = ART_COL + DirArtWriter.NAME_LENGTH + 2;
 
 	private final java.awt.Frame owner;
 	private final transient DiskPanel panel;
 	private final transient DiskImage image;
 	private final List<DirArtWriter.Row> rows = new ArrayList<>();
 	private final byte[] header = new byte[DirArtWriter.NAME_LENGTH];
-	private final JTextField idField = new JTextField("00 2A", 5);
+	/** The 5 characters of the disk ID field in the header line: ID, space, DOS type. */
+	private final char[] diskIdChars = "00 2A".toCharArray();
 	private final JSpinner rowCount;
 	private final JComboBox<DirArtWriter.Mode> modeBox = new JComboBox<>(DirArtWriter.Mode.values());
 	private final JCheckBox writeHeader = new JCheckBox("Also write disk name and ID", true);
@@ -87,8 +91,6 @@ public class DirArtEditorDialog extends JDialog {
 		top.add(charsetBox);
 		top.add(new JLabel("Entries"));
 		top.add(rowCount);
-		top.add(new JLabel("Disk ID"));
-		top.add(idField);
 		// start with the real disk name and ID, so that changing only one of them keeps the other
 		if (image != null && DirArtWriter.isSupported(image)) {
 			try {
@@ -96,18 +98,11 @@ public class DirArtEditorDialog extends JDialog {
 				for (int i = 0; i < name.length && i < header.length; i++) {
 					header[i] = (name[i] & 0xff) == 0xa0 ? (byte) 0x20 : name[i];
 				}
-				idField.setText(idText(DirArtWriter.readDiskId(image)));
+				setDiskId(idText(DirArtWriter.readDiskId(image)));
 			} catch (CbmException e) {
 				// keep the empty header
 			}
 		}
-		GuiHelper.installPetsciiCase(idField, () -> true);
-		idField.addKeyListener(new java.awt.event.KeyAdapter() {
-			@Override
-			public void keyTyped(KeyEvent e) {
-				writeHeader.setSelected(true);
-			}
-		});
 		var importBtn = new JButton("Read from disk");
 		var clearBtn = new JButton("Clear all");
 		var fillBtn = new JButton("Fill line");
@@ -241,11 +236,17 @@ public class DirArtEditorDialog extends JDialog {
 		if (image != null && DirArtWriter.isSupported(image)) {
 			sb.append(" - disk allows up to ").append(DirArtWriter.maxEntries(image));
 		} else {
-			sb.append(" - no D64 / D71 / D81 image is loaded in the active list, so writing is not possible");
+			sb.append(" - no D64 / D71 / D81 image is loaded in the active list, "Write to disk" saves the DIR art as a new disk image");
 		}
 		sb.append(String.format(" - brush: $%02X (the space character erases)", brush));
 		sb.append(" - left click draws, right click picks, shift / ctrl click selects lines, type to enter text");
 		info.setText(sb.toString());
+	}
+
+	private void setDiskId(String text) {
+		for (int i = 0; i < diskIdChars.length; i++) {
+			diskIdChars[i] = i < text.length() ? text.charAt(i) : ' ';
+		}
 	}
 
 	/** The 5 bytes of the disk ID field (ID, shifted space, DOS type) as text. */
@@ -291,7 +292,7 @@ public class DirArtEditorDialog extends JDialog {
 			modeBox.setSelectedItem(DirArtWriter.Mode.UPDATE);
 			writeHeader.setSelected(false);
 			var id = DirArtWriter.readDiskId(image);
-			idField.setText(idText(id));
+			setDiskId(idText(id));
 			var name = DirArtWriter.readDiskName(image);
 			for (int i = 0; i < name.length; i++) {
 				header[i] = (name[i] & 0xff) == 0xa0 ? (byte) 0x20 : name[i];
@@ -319,7 +320,7 @@ public class DirArtEditorDialog extends JDialog {
 				header[i] = (name[i] & 0xff) == 0xa0 ? (byte) 0x20 : name[i];
 			}
 			var id = DirArtWriter.readDiskId(image);
-			idField.setText(idText(id));
+			setDiskId(idText(id));
 			updating = true;
 			rowCount.setValue(rows.size());
 			updating = false;
@@ -334,9 +335,81 @@ public class DirArtEditorDialog extends JDialog {
 		}
 	}
 
+	/** The disk name in the header line as text, for a file name and a new disk. */
+	private String headerText() {
+		var sb = new StringBuilder();
+		for (byte b : header) {
+			int v = b & 0x7f;
+			sb.append(v >= 0x20 && v < 0x5b ? (char) v : ' ');
+		}
+		return sb.toString().trim();
+	}
+
+	/** No disk image is loaded: offer to save the DIR art as a new disk image, so the work is not lost. */
+	private void saveAsNewDisk() {
+		var toWrite = DirArtWriter.rowsToWrite(rows);
+		if (toWrite.isEmpty() && headerText().isEmpty()) {
+			JOptionPane.showMessageDialog(this, "There is nothing to save yet.", "DIR art", JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
+		var types = new DiskImageType[] { DiskImageType.D64, DiskImageType.D71, DiskImageType.D81 };
+		var typeBox = new JComboBox<>(new String[] { "D64 (1541)", "D71 (1571)", "D81 (1581)" });
+		var panelBox = new javax.swing.JPanel(new java.awt.GridLayout(0, 1, 0, 6));
+		panelBox.add(new JLabel("No disk image is loaded. Save the DIR art as a new disk image?"));
+		var typeRow = new javax.swing.JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+		typeRow.add(new JLabel("Disk type"));
+		typeRow.add(typeBox);
+		panelBox.add(typeRow);
+		if (JOptionPane.showConfirmDialog(this, panelBox, "DIR art - new disk image", JOptionPane.OK_CANCEL_OPTION,
+				JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) {
+			return;
+		}
+		var type = types[Math.max(0, typeBox.getSelectedIndex())];
+		var base = DiskPanel.fileNameFromDiskName(headerText());
+		var defaultName = Setting.checkFileNameExtension(type, false, base.isEmpty() ? "DirArt" : base);
+		var last = Setting.LAST_SAVE_DIR.getString();
+		var startDir = last != null && !last.isEmpty() && new java.io.File(last).isDirectory()
+				? new java.io.File(last) : new java.io.File(System.getProperty("user.home"));
+		var file = FileDialogHelper.openImageFileDialog(startDir, defaultName, true);
+		if (file == null) {
+			return;
+		}
+		if (file.getAbsoluteFile().getParentFile() != null) {
+			Setting.LAST_SAVE_DIR.set(file.getAbsoluteFile().getParentFile().getPath());
+		}
+		var saveName = Setting.checkFileNameExtension(type, false, file.getPath());
+		if (saveName == null) {
+			return;
+		}
+		var error = writeNewImage(new java.io.File(saveName), type, toWrite);
+		JOptionPane.showMessageDialog(this, error == null ? "The new disk image was saved:\n" + saveName : error, "DIR art",
+				error == null ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.ERROR_MESSAGE);
+	}
+
+	/** Create a new disk image file with the disk name, ID and directory entries of the editor. @return null, or an error text */
+	String writeNewImage(java.io.File file, DiskImageType type, List<DirArtWriter.Row> toWrite) {
+		try {
+			var img = type.getInstance(new ConsoleStream(new javax.swing.JTextArea()));
+			var idText = new String(diskIdChars).replace(' ', '\u00a0');
+			if (!img.saveNewImage(file, headerText(), idText)) {
+				return "The disk image could not be created.";
+			}
+			img.setFile(file);
+			var name = header.clone();
+			for (int i = name.length - 1; i >= 0 && name[i] == 0x20; i--) {
+				name[i] = (byte) 0xa0;
+			}
+			DirArtWriter.write(img, toWrite, DirArtWriter.Mode.REPLACE, name, idBytes(new String(diskIdChars)));
+			img.save();
+			return null;
+		} catch (CbmException | RuntimeException e) {
+			return "The disk image could not be saved: " + e.getMessage();
+		}
+	}
+
 	private void writeToDisk() {
 		if (image == null || !DirArtWriter.isSupported(image)) {
-			JOptionPane.showMessageDialog(this, "Load a D64, D71 or D81 image in the active list first.", "DIR art", JOptionPane.INFORMATION_MESSAGE);
+			saveAsNewDisk();
 			return;
 		}
 		var mode = (DirArtWriter.Mode) modeBox.getSelectedItem();
@@ -370,7 +443,7 @@ public class DirArtEditorDialog extends JDialog {
 				for (int i = diskName.length - 1; i >= 0 && diskName[i] == 0x20; i--) {
 					diskName[i] = (byte) 0xa0;
 				}
-				diskId = idBytes(idField.getText());
+				diskId = idBytes(new String(diskIdChars));
 			}
 			DirArtWriter.write(image, toWrite, mode, diskName, diskId);
 			if (panel != null) {
@@ -385,9 +458,10 @@ public class DirArtEditorDialog extends JDialog {
 	}
 
 	/** Screen code for an ASCII char, for the text around the art. */
-	private static int ascii(char c) {
+	private int ascii(char c) {
 		if (c >= 'A' && c <= 'Z') {
-			return c - 'A' + 1;
+			// the lower case / upper case character set has the capital letters at 0x41
+			return drawLower ? c - 'A' + 0x41 : c - 'A' + 1;
 		} else if (c >= 'a' && c <= 'z') {
 			return c - 'a' + 1;
 		}
@@ -472,6 +546,10 @@ public class DirArtEditorDialog extends JDialog {
 				} else {
 					setCell(row, curCol, brush);
 				}
+			} else if (row == 0 && col >= ID_COL && col < ID_COL + diskIdChars.length && e.getID() == MouseEvent.MOUSE_PRESSED) {
+				selected.clear();
+				curRow = 0;
+				curCol = DirArtWriter.NAME_LENGTH + (col - ID_COL);
 			} else if (row > 0 && col >= ART_COL + DirArtWriter.NAME_LENGTH + 2 && e.getID() == MouseEvent.MOUSE_PRESSED) {
 				var r = rows.get(row - 1);
 				r.setTypeCode((r.getTypeCode() + 1) % DirArtWriter.TYPE_NAMES.length);
@@ -489,29 +567,73 @@ public class DirArtEditorDialog extends JDialog {
 			repaint();
 		}
 
+		/** Last editable column in the current row: the header line also has the disk ID. */
+		private int lastCol() {
+			return curRow == 0 ? DirArtWriter.NAME_LENGTH + diskIdChars.length - 1 : DirArtWriter.NAME_LENGTH - 1;
+		}
+
+		private void tab(boolean back) {
+			int n = rows.size();
+			if (!back) {
+				if (curRow == 0 && curCol < DirArtWriter.NAME_LENGTH) {
+					curCol = DirArtWriter.NAME_LENGTH;
+				} else if (curRow < n) {
+					curRow++;
+					curCol = 0;
+				} else {
+					curRow = 0;
+					curCol = 0;
+				}
+			} else if (curRow == 0 && curCol >= DirArtWriter.NAME_LENGTH) {
+				curCol = 0;
+			} else if (curRow == 0) {
+				curRow = n;
+				curCol = 0;
+			} else if (curRow == 1) {
+				curRow = 0;
+				curCol = DirArtWriter.NAME_LENGTH;
+			} else {
+				curRow--;
+				curCol = 0;
+			}
+		}
+
+		private void setCurrent(int value, char ch) {
+			if (curRow == 0 && curCol >= DirArtWriter.NAME_LENGTH) {
+				diskIdChars[curCol - DirArtWriter.NAME_LENGTH] = ch;
+				writeHeader.setSelected(true);
+			} else {
+				setCell(curRow, curCol, value);
+			}
+		}
+
 		private void handleKey(KeyEvent e) {
 			switch (e.getKeyCode()) {
+			case KeyEvent.VK_TAB:
+				tab(e.isShiftDown());
+				break;
 			case KeyEvent.VK_LEFT:
 				curCol = Math.max(0, curCol - 1);
 				break;
 			case KeyEvent.VK_RIGHT:
-				curCol = Math.min(DirArtWriter.NAME_LENGTH - 1, curCol + 1);
+				curCol = Math.min(lastCol(), curCol + 1);
 				break;
 			case KeyEvent.VK_UP:
 				curRow = Math.max(0, curRow - 1);
 				break;
 			case KeyEvent.VK_DOWN:
 				curRow = Math.min(rows.size(), curRow + 1);
+				curCol = Math.min(curCol, lastCol());
 				break;
 			case KeyEvent.VK_BACK_SPACE:
 				curCol = Math.max(0, curCol - 1);
-				setCell(curRow, curCol, 0x20);
+				setCurrent(0x20, ' ');
 				break;
 			case KeyEvent.VK_ESCAPE:
 				selected.clear();
 				break;
 			case KeyEvent.VK_DELETE:
-				setCell(curRow, curCol, 0x20);
+				setCurrent(0x20, ' ');
 				break;
 			case KeyEvent.VK_ENTER:
 				curCol = 0;
@@ -521,6 +643,14 @@ public class DirArtEditorDialog extends JDialog {
 				char c = e.getKeyChar();
 				if (c == KeyEvent.CHAR_UNDEFINED || e.isMetaDown() || e.isControlDown()) {
 					return;
+				}
+				if (curRow == 0 && curCol >= DirArtWriter.NAME_LENGTH) {
+					// disk ID: like on a C64 a letter without Shift is a capital letter
+					if (c >= 0x20 && c < 0x7f) {
+						setCurrent(0, Character.isLetter(c) ? (e.isShiftDown() ? Character.toLowerCase(c) : Character.toUpperCase(c)) : c);
+						curCol = Math.min(lastCol(), curCol + 1);
+					}
+					break;
 				}
 				int p = C64.asciiToPetscii(c);
 				if (Character.isLetter(c) && p >= 0 && charsetBox.getSelectedIndex() == 1 && !e.isShiftDown()) {
@@ -558,7 +688,7 @@ public class DirArtEditorDialog extends JDialog {
 			for (int c = 0; c < DirArtWriter.NAME_LENGTH; c++) {
 				C64.drawPetscii(g, header[c] & 0xff, (ART_COL + c) * CELL, 0, CELL, CELL, bg, fg, drawMachine, drawLower);
 			}
-			drawText(g, "\" " + String.format("%-5s", idField.getText()), ART_COL + DirArtWriter.NAME_LENGTH, 0, fg, headBg);
+			drawText(g, "\" " + new String(diskIdChars), ART_COL + DirArtWriter.NAME_LENGTH, 0, fg, headBg);
 			g.translate(0, GAP);
 			for (int r = 0; r < rows.size(); r++) {
 				var row = rows.get(r);
@@ -591,7 +721,8 @@ public class DirArtEditorDialog extends JDialog {
 			g.setColor(fg);
 			g.drawLine(-10, CELL + GAP / 2, getWidth(), CELL + GAP / 2);
 			g.setColor(Color.YELLOW);
-			g.drawRect((ART_COL + curCol) * CELL, curRow * CELL + (curRow > 0 ? GAP : 0), CELL - 1, CELL - 1);
+			int curX = curCol < DirArtWriter.NAME_LENGTH ? ART_COL + curCol : ID_COL + (curCol - DirArtWriter.NAME_LENGTH);
+			g.drawRect(curX * CELL, curRow * CELL + (curRow > 0 ? GAP : 0), CELL - 1, CELL - 1);
 			g.translate(-10, -10);
 		}
 	}
