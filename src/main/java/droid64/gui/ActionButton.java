@@ -31,7 +31,7 @@ public enum ActionButton {
 	SETTINGS_BUTTON(        24, Resources.DROID64_BUTTON_SETTINGS,      'S', false),
 	MIRROR_BUTTON(          25, Resources.DROID64_BUTTON_MIRROR,        'v', false),
 	DIR_ART_BUTTON(         26, Resources.DROID64_BUTTON_DIRART,        'a', false),
-	PLUGIN_6_BUTTON(        27, "",                                     '6', true),
+	HEX_EDIT_BUTTON(        27, Resources.DROID64_BUTTON_HEXEDIT,      'H', false),
 	DELETE_FILE_BUTTON(     28, Resources.DROID64_BUTTON_DELETE,        'd', false),
 	PLUGIN_8_BUTTON(        29, "",                                     '8', true),
 	VIEW_BASIC_BUTTON(      30, Resources.DROID64_BUTTON_VIEWBASIC,     'B', false),

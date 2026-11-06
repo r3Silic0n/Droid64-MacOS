@@ -53,6 +53,12 @@ import droid64.d64.CbmException;
 import droid64.d64.CbmFile;
 import droid64.d64.CpmFile;
 import droid64.d64.DirEntry;
+import droid64.d64.D64;
+import droid64.d64.D67;
+import droid64.d64.D71;
+import droid64.d64.D80;
+import droid64.d64.D81;
+import droid64.d64.D82;
 import droid64.d64.DiskImage;
 import droid64.d64.DiskImageType;
 import droid64.d64.FileType;
@@ -1013,6 +1019,98 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		for (var i : table.getSelectedRows()) {
 			mainPanel.appendConsole("Hex view '" + getName(i) + "'");
 			hexViewFile(i);
+		}
+	}
+
+	/** Edit the selected file in the hex editor. Changes are written back into the image or the local file. */
+	public void hexEditFile() {
+		var rows = table.getSelectedRows();
+		if (rows.length == 0) {
+			mainPanel.appendConsole("Hex edit: select a file first.");
+			return;
+		}
+		int row = rows[0];
+		var data = getFileData(row);
+		if (data == null) {
+			return;
+		}
+		var name = getName(row);
+		boolean prg = false;
+		HexEditorDialog.Saver saver = null;
+		if (imageLoaded) {
+			var cbm = diskImage.getCbmFile(row);
+			prg = cbm.getFileType() == FileType.PRG;
+			final var image = diskImage;
+			final int length = data.length;
+			saver = newData -> {
+				var err = saveEditedImageFile(image, row, length, newData);
+				if (err == null) {
+					SwingUtilities.invokeLater(() -> reloadDiskImage(true));
+				}
+				return err;
+			};
+		} else if (!zipFileLoaded) {
+			var path = getLocalFilename(row);
+			prg = name.toLowerCase().endsWith(".prg");
+			saver = newData -> {
+				if (!Utility.writeFileSafe(new File(path), newData)) {
+					return "Failed to write " + path;
+				}
+				SwingUtilities.invokeLater(() -> loadLocalDirectory(currentImagePath));
+				return null;
+			};
+		}
+		mainPanel.appendConsole("Hex edit '" + name + "'" + (saver == null ? " (read only)" : ""));
+		HexEditorDialog.show(mainPanel, name, data, prg, saver);
+	}
+
+	/** @return null when saved, otherwise the error message */
+	static String saveEditedImageFile(DiskImage image, int row, int oldLength, byte[] newData) {
+		try {
+			var cbm = image.getCbmFile(row);
+			boolean blockImage = image instanceof D64 || image instanceof D71 || image instanceof D81
+					|| image instanceof D80 || image instanceof D82 || image instanceof D67;
+			if (blockImage && newData.length == oldLength && !image.isCpmImage()) {
+				// same length: patch the data bytes in the file's own sectors, nothing else on the disk changes
+				int track = cbm.getTrack();
+				int sector = cbm.getSector();
+				int pos = 0;
+				for (int guard = 0; track != 0 && guard < 4000; guard++) {
+					var block = image.getBlock(track, sector);
+					int nextTrack = block[0] & 0xff;
+					int nextSector = block[1] & 0xff;
+					int len = nextTrack > 0 ? 254 : nextSector - 1;
+					if (len < 0 || pos + len > newData.length) {
+						return "The file chain does not match the file size.";
+					}
+					System.arraycopy(newData, pos, block, 2, len);
+					image.writeBlock(track, sector, block);
+					pos += len;
+					track = nextTrack;
+					sector = nextSector;
+				}
+				if (pos != newData.length) {
+					return "The file chain does not match the file size.";
+				}
+			} else {
+				// another size: the file is written again with the same name and type
+				int needed = (newData.length + 253) / 254;
+				int old = (oldLength + 253) / 254;
+				if (needed > image.getBlocksFree() + old) {
+					return "Not enough free space on the disk image (needs " + needed + " blocks).";
+				}
+				var copy = new CbmFile(cbm);
+				image.deleteFile(cbm);
+				if (!image.saveFile(copy, true, newData)) {
+					return "Failed to write the file back to the disk image.";
+				}
+			}
+			if (!image.save()) {
+				return "Failed to save the disk image.";
+			}
+			return null;
+		} catch (Exception e) {	// NOSONAR
+			return "Error: " + e.getMessage();
 		}
 	}
 

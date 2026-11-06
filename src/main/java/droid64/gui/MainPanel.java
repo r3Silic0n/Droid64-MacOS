@@ -376,6 +376,7 @@ public class MainPanel implements Serializable {
 		case RENAME_FILE_BUTTON:
 			button.setBackground(adjustedColor(BASE_BUTTON_COLOR, 20, -20, 20));
 			break;
+		case HEX_EDIT_BUTTON:
 		case VIEW_IMAGE_BUTTON:
 		case PLAY_MUSIC_BUTTON:
 		case VIEW_TEXT_BUTTON:
@@ -388,7 +389,6 @@ public class MainPanel implements Serializable {
 		case PLUGIN_3_BUTTON:
 		case PLUGIN_4_BUTTON:
 		case PLUGIN_5_BUTTON:
-		case PLUGIN_6_BUTTON:
 		case PLUGIN_7_BUTTON:
 		case PLUGIN_8_BUTTON:
 			button.setBackground(adjustedColor(BASE_BUTTON_COLOR, -20, 20, 20));
@@ -466,7 +466,7 @@ public class MainPanel implements Serializable {
 		var externalPrograms = Setting.getExternalPrograms();
 		// plugin number -> button position (independent of the order the buttons are declared in)
 		var pluginActionButtons = Arrays.asList(ActionButton.PLUGIN_1_BUTTON, ActionButton.PLUGIN_2_BUTTON, ActionButton.PLUGIN_3_BUTTON,
-				ActionButton.PLUGIN_5_BUTTON, ActionButton.PLUGIN_6_BUTTON, ActionButton.PLUGIN_7_BUTTON, ActionButton.PLUGIN_8_BUTTON,
+				null, null, ActionButton.PLUGIN_7_BUTTON, ActionButton.PLUGIN_8_BUTTON,
 				ActionButton.PLUGIN_4_BUTTON);
 		for (var i = 0; i < pluginButtons.length && i < externalPrograms.size(); i++) {
 			var ep = externalPrograms.get(i);
@@ -477,6 +477,10 @@ public class MainPanel implements Serializable {
 				tooltip = "OpenCBM: copy, format and control real Commodore drives";
 			}
 			var actionButton = i < pluginActionButtons.size() ? pluginActionButtons.get(i) : null;
+			if (ep != null && isOpenCbmProgram(ep)) {
+				// the OpenCBM window has the place of the old "CBM dir" button, which it replaces
+				actionButton = ActionButton.PLUGIN_5_BUTTON;
+			}
 			pluginButtons[i] = createButton(label != null ? label : "", actionButton, tooltip, pluginButtonListener);
 		}
 		consoleHideButton = createToggleButton(ActionButton.HIDE_CONSOLE_BUTTON,
@@ -577,6 +581,7 @@ public class MainPanel implements Serializable {
 		var viewTextButton = createButton(ActionButton.VIEW_TEXT_BUTTON, null);
 		var hexViewButton = createButton(ActionButton.PLAY_MUSIC_BUTTON, null);
 		var basicViewButton = createButton(ActionButton.VIEW_BASIC_BUTTON, null);
+		var hexEditButton = createButton(ActionButton.HEX_EDIT_BUTTON, null);
 		var imageViewButton = createButton(ActionButton.VIEW_IMAGE_BUTTON, null);
 		ActionListener viewListener = event -> {
 			try {
@@ -588,6 +593,8 @@ public class MainPanel implements Serializable {
 				diskPanel.showFile();
 			} else if (hexViewButton.getActionCommand().equals(cmd)) {
 				diskPanel.playMusic();
+			} else if (hexEditButton.getActionCommand().equals(cmd)) {
+				diskPanel.hexEditFile();
 			} else if (basicViewButton.getActionCommand().equals(cmd)) {
 				diskPanel.basicViewFile();
 			} else if (imageViewButton.getActionCommand().equals(cmd)) {
@@ -600,6 +607,7 @@ public class MainPanel implements Serializable {
 		viewTextButton.addActionListener(viewListener);
 		hexViewButton.addActionListener(viewListener);
 		basicViewButton.addActionListener(viewListener);
+		hexEditButton.addActionListener(viewListener);
 		imageViewButton.addActionListener(viewListener);
 	}
 
