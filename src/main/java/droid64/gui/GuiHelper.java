@@ -330,4 +330,27 @@ public class GuiHelper {
 	public static List<LookAndFeelInfo> getLookAndFeels() {
 		return Arrays.asList(UIManager.getInstalledLookAndFeels());
 	}
+
+	/**
+	 * Like on a C64: letters typed without Shift are upper case, with Shift they are lower case (Caps Lock is ignored).
+	 * Pasted or programmatically set text is not changed.
+	 * @param field text field
+	 * @param enabled tells if the conversion is active now
+	 */
+	public static void installPetsciiCase(javax.swing.text.JTextComponent field, java.util.function.BooleanSupplier enabled) {
+		field.addKeyListener(new java.awt.event.KeyAdapter() {
+			@Override
+			public void keyTyped(java.awt.event.KeyEvent e) {
+				char c = e.getKeyChar();
+				if (!enabled.getAsBoolean() || !Character.isLetter(c) || e.isControlDown() || e.isMetaDown() || e.isAltDown()
+						|| !field.isEditable()) {
+					return;
+				}
+				char out = e.isShiftDown() ? Character.toLowerCase(c) : Character.toUpperCase(c);
+				if (out != c) {
+					e.setKeyChar(out);
+				}
+			}
+		});
+	}
 }

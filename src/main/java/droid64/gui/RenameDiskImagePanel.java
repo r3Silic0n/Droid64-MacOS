@@ -144,6 +144,8 @@ public class RenameDiskImagePanel extends JPanel {
 
 		cpmBox.setToolTipText("Format for CP/M.");
 
+		GuiHelper.installPetsciiCase(nameTextField, () -> true);
+		GuiHelper.installPetsciiCase(idTextField, () -> true);
 		final var nameTextField2 = new JTextField(Utility.EMPTY, 16);
 		nameTextField2.setBackground(Setting.DIR_BG.getColor());
 		nameTextField2.setForeground(Setting.DIR_FG.getColor());

@@ -51,6 +51,7 @@ public class RenameFilePanel extends JPanel {
 
 	private static final long serialVersionUID = 1L;
 
+	private boolean cbmCase;
 	private final JTextField oldNameTextField = new JTextField(16);
 	private final JTextField newNameTextField = new JTextField(16);
 	private final JTextField cbmNameTextField = new JTextField(16);
@@ -118,6 +119,7 @@ public class RenameFilePanel extends JPanel {
 	public RenameResult show(String title, String fileName, FileType fileType, boolean isCbmFile, boolean createPartition) {
 
 		batchType = null;
+		cbmCase = isCbmFile;
 		batchPanel.setVisible(isCbmFile && !createPartition && selectedCount > 1);
 		batchButton.setText("Set type of all " + selectedCount + " selected files");
 		nameLengthDocument.setText(fileName);
@@ -193,6 +195,8 @@ public class RenameFilePanel extends JPanel {
 		cbmIdTextField.setBorder(BorderFactory.createCompoundBorder(cbmIdTextField.getBorder(), BorderFactory.createEmptyBorder(4, 4, 4, 4)));
 
 		newNameTextField.setEditable(true);
+		GuiHelper.installPetsciiCase(newNameTextField, () -> cbmCase);
+		GuiHelper.installPetsciiCase(idField, () -> cbmCase);
 		newNameTextField.setToolTipText("Enter the new filename here.");
 		newNameTextField.setDocument(nameLengthDocument);
 		newNameTextField.getDocument().addDocumentListener(new RenameDocumentListener(cbmNameTextField));
