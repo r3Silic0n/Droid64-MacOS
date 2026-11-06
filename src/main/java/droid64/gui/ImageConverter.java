@@ -28,6 +28,8 @@ final class ImageConverter {
 		final CbmFile file;
 		int level = OK;
 		String note = "";
+		/** Blocks in the real sector chain of the file, -1 when not known. */
+		int real = -1;
 
 		Item(int index, CbmFile file) {
 			this.index = index;
@@ -35,7 +37,12 @@ final class ImageConverter {
 		}
 
 		int blocks() {
-			return level == SKIP ? 0 : file.getSizeInBlocks();
+			return level == SKIP ? 0 : real >= 0 ? real : file.getSizeInBlocks();
+		}
+
+		/** True when the directory shows another size than the real chain has. */
+		boolean sizeDiffers() {
+			return level != SKIP && real >= 0 && real != file.getSizeInBlocks();
 		}
 	}
 
@@ -85,9 +92,102 @@ final class ImageConverter {
 				item.level = SKIP;
 				item.note = "REL file: not converted yet";
 			}
+			if (item.level != SKIP && hasChains(src)) {
+				item.real = cf.getTrack() == 0 ? 0 : chain(src, cf.getTrack(), cf.getSector());
+				if (item.sizeDiffers()) {
+					item.level = WARN;
+					item.note = "the directory shows " + cf.getSizeInBlocks() + " blocks, the real size is " + item.real;
+				}
+			}
 			items.add(item);
 		}
 		return items;
+	}
+
+	/** Hidden data of an image: scratched directory entries that still point to a sector chain. */
+	static final class Hidden {
+		int entries;
+		int blocks;
+	}
+
+	/** Only the block images (not T64, TAP, LNX ...) have sector chains. */
+	private static boolean hasChains(DiskImage image) {
+		return firstDirectorySector(image) != null;
+	}
+
+	private static int[] firstDirectorySector(DiskImage image) {
+		switch (image.getImageFormat().id) {
+		case "D64":
+		case "D71":
+		case "D67":
+			return new int[] { 18, 1 };
+		case "D81":
+			return new int[] { 40, 3 };
+		case "D80":
+		case "D82":
+			return new int[] { 39, 1 };
+		default:
+			return null;
+		}
+	}
+
+	/** Number of blocks of a sector chain (stops at a bad link or a loop). */
+	static int chain(DiskImage image, int track, int sector) {
+		var seen = new java.util.HashSet<Long>();
+		int t = track;
+		int s = sector;
+		int blocks = 0;
+		while (t != 0) {
+			long key = (long) t << 16 | s;
+			if (t < 1 || t > image.getTrackCount() || s < 0 || s >= image.getMaxSectors(t) || !seen.add(key)) {
+				break;
+			}
+			blocks++;
+			try {
+				var b = image.getBlock(t, s);
+				t = b[0] & 0xff;
+				s = b[1] & 0xff;
+			} catch (CbmException | RuntimeException e) {
+				break;
+			}
+		}
+		return blocks;
+	}
+
+	/** Scratched entries ("hidden files") that still have a sector chain: data that the directory does not show. */
+	static Hidden hidden(DiskImage image) {
+		var h = new Hidden();
+		var first = firstDirectorySector(image);
+		if (first == null) {
+			return h;
+		}
+		var seen = new java.util.HashSet<Long>();
+		int t = first[0];
+		int s = first[1];
+		while (t != 0 && seen.add((long) t << 16 | s) && seen.size() < 200) {
+			byte[] b;
+			try {
+				b = image.getBlock(t, s);
+			} catch (CbmException | RuntimeException e) {
+				break;
+			}
+			for (int e = 0; e < 8; e++) {
+				int o = e * 32;
+				int type = b[o + 2] & 0xff;
+				int tr = b[o + 3] & 0xff;
+				int se = b[o + 4] & 0xff;
+				if (type == 0 && tr != 0 && tr <= image.getTrackCount() && se < image.getMaxSectors(tr)) {
+					int blocks = chain(image, tr, se);
+					if (blocks > 0) {
+						h.entries++;
+						h.blocks += blocks;
+					}
+				}
+			}
+			t = b[0] & 0xff;
+			s = b[1] & 0xff;
+		}
+		return h;
 	}
 
 	static int blocksNeeded(List<Item> items) {

@@ -128,7 +128,7 @@ public class ImageConvertDialog extends JDialog {
 		cap.add(capacity, BorderLayout.EAST);
 		top.add(cap, gc);
 
-		var model = new DefaultTableModel(new Object[] { "", "Name", "Type", "Blocks", "Note" }, 0) {
+		var model = new DefaultTableModel(new Object[] { "", "Name", "Type", "Blocks", "Real", "Note" }, 0) {
 			private static final long serialVersionUID = 1L;
 
 			@Override
@@ -138,7 +138,7 @@ public class ImageConvertDialog extends JDialog {
 		};
 		for (var item : items) {
 			model.addRow(new Object[] { item.level == ImageConverter.SKIP ? "skip" : item.level == ImageConverter.WARN ? "!" : "ok",
-					item.file.getName(), item.file.getFileType(), item.file.getSizeInBlocks(), item.note });
+					item.file.getName(), item.file.getFileType(), item.file.getSizeInBlocks(), item.sizeDiffers() ? (Object) item.real : "", item.note });
 		}
 		var table = new JTable(model);
 		// Same look as the file list: the detected machine's palette and the CBM font
@@ -170,7 +170,7 @@ public class ImageConvertDialog extends JDialog {
 				var l = new JLabel(value != null ? value.toString() : "");
 				l.setOpaque(true);
 				// status and note are ordinary text, the rest uses the CBM font
-				l.setFont(col == 0 || col == 4 ? Setting.SYS_FONT.getFont() != null ? Setting.SYS_FONT.getFont().deriveFont((float) Math.max(7, Math.min(11, Setting.ROW_HEIGHT.getInteger()))) : t.getFont() : t.getFont());
+				l.setFont(col == 0 || col == 5 ? Setting.SYS_FONT.getFont() != null ? Setting.SYS_FONT.getFont().deriveFont((float) Math.max(7, Math.min(11, Setting.ROW_HEIGHT.getInteger()))) : t.getFont() : t.getFont());
 				l.setForeground(t.getForeground());
 				l.setBackground(t.getBackground());
 				return l;
@@ -178,6 +178,11 @@ public class ImageConvertDialog extends JDialog {
 		});
 		table.getColumnModel().getColumn(0).setMaxWidth(46);
 		table.getColumnModel().getColumn(3).setMaxWidth(60);
+		table.getColumnModel().getColumn(4).setMaxWidth(60);
+		var hidden = ImageConverter.hidden(image);
+		var hiddenLabel = new JLabel(hidden.entries > 0 ? "Hidden data: " + hidden.entries + " scratched entries still hold "
+				+ hidden.blocks + " blocks that the directory does not show. They are not converted." : " ");
+		hiddenLabel.setBorder(BorderFactory.createEmptyBorder(0, 14, 4, 10));
 		var scroll = new JScrollPane(table);
 		scroll.getViewport().setBackground(bg);
 		scroll.setPreferredSize(new Dimension(560, 220));
@@ -190,7 +195,12 @@ public class ImageConvertDialog extends JDialog {
 
 		setLayout(new BorderLayout());
 		add(top, BorderLayout.NORTH);
-		add(scroll, BorderLayout.CENTER);
+		var center = new JPanel(new BorderLayout());
+		center.add(scroll, BorderLayout.CENTER);
+		if (hidden.entries > 0) {
+			center.add(hiddenLabel, BorderLayout.SOUTH);
+		}
+		add(center, BorderLayout.CENTER);
 		add(buttons, BorderLayout.SOUTH);
 
 		targetBox.addActionListener(e -> targetChanged());
