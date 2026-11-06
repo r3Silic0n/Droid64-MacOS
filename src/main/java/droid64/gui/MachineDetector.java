@@ -117,9 +117,11 @@ public final class MachineDetector {
 		// the load address of the BASIC start decides which computers are possible at all
 		switch (load) {
 		case 0x0801:
+			// a C128 program has the load address $1C01; a program at $0801 is a C64 program, whatever bytes its (packed) data holds
 			plus4 = 0;
 			vic = 0;
 			pet = 0;
+			c128 = 0;
 			break;
 		case 0x1001:
 			c64 = 0;
