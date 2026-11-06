@@ -213,7 +213,7 @@ public class SettingsPanel extends JPanel {
 		dbInner.add(drawDatabasePanel(), BorderLayout.CENTER);
 		dbPart.add(dbInner, BorderLayout.CENTER);
 		filesAndDb.add(dbPart, BorderLayout.CENTER);
-		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_FILES) + " / " + Utility.getMessage(Resources.DROID64_SETTINGS_TAB_DATABASE),
+		tabPane.addTab("Advanced",
 				new JScrollPane(filesAndDb));
 
 		add(tabPane, BorderLayout.CENTER);
