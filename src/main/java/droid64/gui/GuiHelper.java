@@ -324,11 +324,40 @@ public class GuiHelper {
 		combo.setSelectedIndex(-1);
 	}
 
+	private static boolean flatInstalled = false;
+
+	/** Adds the FlatLaf themes (Apache 2.0, bundled in the application) to the list of look and feels. */
+	private static synchronized void installFlatLookAndFeels() {
+		if (flatInstalled) {
+			return;
+		}
+		flatInstalled = true;
+		var themes = new String[][] {
+			{ "Flat Light", "com.formdev.flatlaf.FlatLightLaf" },
+			{ "Flat Dark", "com.formdev.flatlaf.FlatDarkLaf" },
+			{ "Flat IntelliJ", "com.formdev.flatlaf.FlatIntelliJLaf" },
+			{ "Flat Darcula", "com.formdev.flatlaf.FlatDarculaLaf" },
+			{ "Flat macOS Light", "com.formdev.flatlaf.themes.FlatMacLightLaf" },
+			{ "Flat macOS Dark", "com.formdev.flatlaf.themes.FlatMacDarkLaf" } };
+		for (var t : themes) {
+			try {
+				Class.forName(t[1]);
+				UIManager.installLookAndFeel(t[0], t[1]);
+			} catch (ClassNotFoundException | LinkageError e) {
+				// the library is not part of this build
+			}
+		}
+	}
+
 	/**
 	 * @return List of look and feels
 	 */
 	public static List<LookAndFeelInfo> getLookAndFeels() {
-		return Arrays.asList(UIManager.getInstalledLookAndFeels());
+		installFlatLookAndFeels();
+		// the dated CDE/Motif and GTK+ themes are left out of the list
+		return Arrays.stream(UIManager.getInstalledLookAndFeels())
+				.filter(i -> !i.getClassName().contains("motif") && !i.getClassName().contains("gtk"))
+				.collect(java.util.stream.Collectors.toList());
 	}
 
 	/**
