@@ -114,6 +114,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	private File currentImagePath = null;
 
 	private final JPanel diskLabelPane = new JPanel();
+	/** The normal content of the list, and the FTP browser that can replace it */
+	private JPanel dirPanelMain;
+	private transient FtpPanel ftpPanel;
 
 	/** True when a disk image is loaded */
 	private boolean imageLoaded = false;
@@ -139,6 +142,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		rowHeight = Setting.FONT_SIZE.getInteger() + 2;
 
 		var dirPanel = drawDirPanel();
+		dirPanelMain = dirPanel;
 		setTableColors();
 		setLayout(new BorderLayout());
 		add(dirPanel, BorderLayout.CENTER);
@@ -169,6 +173,32 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		}
 		setTableColors();
 		otherDiskPanel.setTableColors();
+	}
+
+	/** Show the FTP browser in this list instead of the files. */
+	public void showFtp() {
+		if (ftpPanel == null) {
+			ftpPanel = new FtpPanel(mainPanel, this::hideFtp, () -> otherDiskPanel != null ? otherDiskPanel : this);
+			ftpPanel.setPreferredSize(new Dimension(50, 300));
+			remove(dirPanelMain);
+			add(ftpPanel, BorderLayout.CENTER);
+			revalidate();
+			repaint();
+		}
+	}
+
+	/** Close the FTP browser and show the files again. */
+	public void hideFtp() {
+		if (ftpPanel != null) {
+			var p = ftpPanel;
+			ftpPanel = null;
+			p.shutdown();
+			remove(p);
+			add(dirPanelMain, BorderLayout.CENTER);
+			revalidate();
+			repaint();
+			table.requestFocus();
+		}
 	}
 
 	public boolean isActive() {

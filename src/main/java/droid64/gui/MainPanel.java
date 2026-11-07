@@ -264,6 +264,17 @@ public class MainPanel implements Serializable {
 		}
 	}
 
+	/** The list where FTP opens: "left", "right" or "active". */
+	DiskPanel getFtpTargetPanel(String where) {
+		if ("left".equals(where)) {
+			return diskPanel1;
+		} else if ("right".equals(where)) {
+			return diskPanel2;
+		}
+		var a = getActiveDiskPanel();
+		return a != null ? a : diskPanel1;
+	}
+
 	protected DiskPanel getInactiveDiskPanel() {
 		if (diskPanel1 != null && diskPanel1.isActive()) {
 			return diskPanel2;
@@ -689,7 +700,7 @@ public class MainPanel implements Serializable {
 		});
 		ftpButton = createButton(ActionButton.FTP_BUTTON, event -> {
 			if (ftpButton.getActionCommand().equals(event.getActionCommand())) {
-				FtpDialog.show(this);
+				FtpDialog.open(this, ftpButton);
 			}
 		});
 		searchButton = createButton(ActionButton.SEARCH_BUTTON, event -> {

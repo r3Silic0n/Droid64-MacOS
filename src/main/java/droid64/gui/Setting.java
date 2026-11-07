@@ -74,6 +74,7 @@ public enum Setting {
 	FTP_PORT("ftp_port",                         ParameterType.STRING,           "21"),
 	FTP_USER("ftp_user",                         ParameterType.STRING,           "anonymous"),
 	FTP_SITES("ftp_sites",                       ParameterType.STRING,           Utility.EMPTY),
+	FTP_OPEN_IN("ftp_open_in",                   ParameterType.STRING,           "window"),
 	FTP_LOCAL_DIR("ftp_local_dir",               ParameterType.STRING,           Utility.EMPTY),
 	OPENCBM_DEVICE("opencbm_device",             ParameterType.STRING,           "8"),
 	OPENCBM_TRANSFER("opencbm_transfer",         ParameterType.STRING,           "auto"),

@@ -183,6 +183,7 @@ public class SettingsPanel extends JPanel {
 		var tabPane = new JTabbedPane();
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_GUI), new JScrollPane(drawGuiPanel()));
 		tabPane.addTab(Utility.getMessage(Resources.DROID64_SETTINGS_TAB_VICE), new JScrollPane(drawVicePanel()));
+		tabPane.addTab("FTP", new JScrollPane(drawFtpPanel()));
 		var filesAndDb = new JPanel(new BorderLayout());
 		var filesPart = drawFilesPanel();
 		filesAndDb.add(filesPart, BorderLayout.NORTH);
@@ -275,6 +276,157 @@ public class SettingsPanel extends JPanel {
 	}
 
 	/** Paths to the VICE emulators started by the VICE buttons. */
+	private JPanel drawFtpPanel() {
+		var panel = new JPanel(new BorderLayout(6, 6));
+		panel.setBorder(javax.swing.BorderFactory.createEmptyBorder(6, 6, 6, 6));
+		// where the connection opens
+		var where = new JPanel();
+		where.setLayout(new javax.swing.BoxLayout(where, javax.swing.BoxLayout.Y_AXIS));
+		where.setBorder(javax.swing.BorderFactory.createTitledBorder("Open the FTP connection in"));
+		var group = new javax.swing.ButtonGroup();
+		var values = new String[] { "left", "right", "active", "window" };
+		var labels = new String[] { "Left list", "Right list", "The active list (the one you are working in)",
+				"Its own FTP window (lister window): the main menu only offers the list of the saved addresses" };
+		var current = FtpSites.openIn();
+		for (int i = 0; i < values.length; i++) {
+			final var value = values[i];
+			var rb = new javax.swing.JRadioButton(labels[i], value.equals(current));
+			rb.addActionListener(e -> Setting.FTP_OPEN_IN.set(value));
+			group.add(rb);
+			where.add(rb);
+		}
+		// site manager
+		var sites = new java.util.ArrayList<String[]>(FtpSites.load());
+		var model = new javax.swing.table.AbstractTableModel() {
+			private static final long serialVersionUID = 1L;
+			private final String[] cols = { "Name", "Host", "Port", "User", "Password", "Remote folder" };
+
+			@Override
+			public int getRowCount() {
+				return sites.size();
+			}
+
+			@Override
+			public int getColumnCount() {
+				return cols.length;
+			}
+
+			@Override
+			public String getColumnName(int c) {
+				return cols[c];
+			}
+
+			@Override
+			public Object getValueAt(int r, int c) {
+				var s = sites.get(r);
+				switch (c) {
+				case 0:
+					return s[FtpSites.NAME];
+				case 1:
+					return s[FtpSites.HOST];
+				case 2:
+					return s[FtpSites.PORT];
+				case 3:
+					return s[FtpSites.USER];
+				case 4:
+					return s[FtpSites.PASSWORD].isEmpty() ? "" : "******";
+				default:
+					return s[FtpSites.REMOTE];
+				}
+			}
+		};
+		var table = new javax.swing.JTable(model);
+		table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+		Runnable save = () -> {
+			FtpSites.store(sites);
+			model.fireTableDataChanged();
+		};
+		var add = new JButton("Add...");
+		var edit = new JButton("Edit...");
+		var delete = new JButton("Delete");
+		add.addActionListener(e -> {
+			var s = editSite(null);
+			if (s != null) {
+				sites.removeIf(o -> o[FtpSites.NAME].equalsIgnoreCase(s[FtpSites.NAME]));
+				sites.add(s);
+				save.run();
+			}
+		});
+		edit.addActionListener(e -> {
+			int r = table.getSelectedRow();
+			if (r >= 0) {
+				var s = editSite(sites.get(r));
+				if (s != null) {
+					sites.set(r, s);
+					save.run();
+				}
+			}
+		});
+		delete.addActionListener(e -> {
+			int r = table.getSelectedRow();
+			if (r >= 0) {
+				sites.remove(r);
+				save.run();
+			}
+		});
+		table.addMouseListener(new java.awt.event.MouseAdapter() {
+			@Override
+			public void mouseClicked(java.awt.event.MouseEvent e) {
+				if (e.getClickCount() == 2) {
+					edit.doClick();
+				}
+			}
+		});
+		var buttons = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 4, 2));
+		buttons.add(add);
+		buttons.add(edit);
+		buttons.add(delete);
+		var note = new JLabel("Passwords are only hidden in the settings file, they are not encrypted. Leave the password empty to be asked each time.");
+		var manager = new JPanel(new BorderLayout(4, 4));
+		manager.setBorder(javax.swing.BorderFactory.createTitledBorder("Site manager"));
+		var scroll = new JScrollPane(table);
+		scroll.setPreferredSize(new java.awt.Dimension(560, 180));
+		manager.add(scroll, BorderLayout.CENTER);
+		var south = new JPanel(new BorderLayout());
+		south.add(buttons, BorderLayout.NORTH);
+		south.add(note, BorderLayout.SOUTH);
+		manager.add(south, BorderLayout.SOUTH);
+		panel.add(where, BorderLayout.NORTH);
+		panel.add(manager, BorderLayout.CENTER);
+		return panel;
+	}
+
+	/** Edit (or create when site is null) a saved FTP site. Returns null when cancelled. */
+	private String[] editSite(String[] site) {
+		var name = new JTextField(site == null ? "" : site[FtpSites.NAME], 20);
+		var host = new JTextField(site == null ? "" : site[FtpSites.HOST], 20);
+		var port = new JTextField(site == null ? "21" : site[FtpSites.PORT], 5);
+		var user = new JTextField(site == null ? "anonymous" : site[FtpSites.USER], 14);
+		var pass = new javax.swing.JPasswordField(site == null ? "" : FtpSites.password(site), 14);
+		var remote = new JTextField(site == null ? "" : site[FtpSites.REMOTE], 20);
+		var local = new JTextField(site == null ? "" : site[FtpSites.LOCAL], 20);
+		var form = new JPanel(new GridBagLayout());
+		var gbc = new GridBagConstraints();
+		gbc.fill = GridBagConstraints.HORIZONTAL;
+		gbc.insets = new java.awt.Insets(2, 4, 2, 4);
+		var labels = new String[] { "Name", "Host", "Port", "User", "Password", "Start folder", "Download folder" };
+		var fields = new JComponent[] { name, host, port, user, pass, remote, local };
+		for (int i = 0; i < labels.length; i++) {
+			GuiHelper.addToGridBag(0, i, 0.0, 0.0, 1, gbc, form, new JLabel(labels[i]));
+			GuiHelper.addToGridBag(1, i, 1.0, 0.0, 1, gbc, form, fields[i]);
+		}
+		if (JOptionPane.showConfirmDialog(this, form, site == null ? "Add FTP site" : "Edit FTP site", JOptionPane.OK_CANCEL_OPTION,
+				JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) {
+			return null;
+		}
+		if (name.getText().trim().isEmpty() || host.getText().trim().isEmpty()) {
+			JOptionPane.showMessageDialog(this, "The name and the host are needed.");
+			return null;
+		}
+		return FtpSites.newSite(name.getText(), host.getText(), port.getText().trim(), user.getText(), new String(pass.getPassword()),
+				remote.getText(), local.getText());
+	}
+
 	private JPanel drawVicePanel() {
 		var panel = new JPanel(new GridBagLayout());
 		var gbc = new GridBagConstraints();
