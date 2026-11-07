@@ -52,6 +52,22 @@ public class Tap extends T64 {
 	 * @param fileNumber number of the file in the listing, from 0
 	 * @return byte position in the TAP file, or -1
 	 */
+	public byte[] getTapeFrom(int fileNumber) {
+		int off = getTapeOffset(fileNumber);
+		if (off < 20 || tapData == null || off >= tapData.length) {
+			return null;
+		}
+		var out = new byte[20 + tapData.length - off];
+		System.arraycopy(tapData, 0, out, 0, 20);
+		System.arraycopy(tapData, off, out, 20, tapData.length - off);
+		int size = out.length - 20;
+		out[16] = (byte) size;
+		out[17] = (byte) (size >> 8);
+		out[18] = (byte) (size >> 16);
+		out[19] = (byte) (size >> 24);
+		return out;
+	}
+
 	public int getTapeOffset(int fileNumber) {
 		if (programCache == null) {
 			programCache = decode(tapData);

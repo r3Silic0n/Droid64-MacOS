@@ -602,7 +602,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			selectedFiles = onlyPrg;
 		}
 		var execArgs = prg.getExecute(imgFile, selectedFiles, otherPath, directory, imageType);
-		addTapeOffset(execArgs, prg);
+		addTapeOffset(execArgs, prg, imgFile);
 		File imgParentFile;
 		if (imgFile != null) {
 			imgParentFile = imgFile.getParentFile();
@@ -616,22 +616,35 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 	/**
 	 * A program of a TAP image: VICE would search for it from the start of the tape, loading every program in front of it.
-	 * Tell it where the program starts in the TAP file instead (what its Tape Browser does).
+	 * So the program is started from a temporary copy of the tape which begins at the program, and VICE finds it at once.
 	 */
-	private void addTapeOffset(List<String> execArgs, ExternalProgram prg) {
-		if (!imageLoaded || !(diskImage instanceof droid64.d64.Tap) || execArgs.size() < 4 || !"-drive8type".equals(execArgs.get(1))
+	private void addTapeOffset(List<String> execArgs, ExternalProgram prg, File imgFile) {
+		if (!imageLoaded || !(diskImage instanceof droid64.d64.Tap) || imgFile == null || execArgs.size() < 4
 				|| prg.getArguments() == null || !prg.getArguments().contains("{ImageFiles}")) {
 			return;
 		}
 		var rows = table.getSelectedRows();
-		if (rows.length != 1) {
+		var last = execArgs.get(execArgs.size() - 1);
+		var prefix = imgFile.getPath() + ":";
+		if (rows.length != 1 || !last.startsWith(prefix)) {
 			return;
 		}
-		int offset = ((droid64.d64.Tap) diskImage).getTapeOffset(rows[0]);
-		if (offset > 20) {
-			execArgs.add(execArgs.size() - 1, "-autostarttapoffset");
-			execArgs.add(execArgs.size() - 1, String.valueOf(offset));
-			mainPanel.appendConsole("Tape: starting at byte " + offset + " of the TAP file");
+		var data = ((droid64.d64.Tap) diskImage).getTapeFrom(rows[0]);
+		if (data == null) {
+			return;
+		}
+		try {
+			var base = imgFile.getName();
+			if (base.contains(".")) {
+				base = base.substring(0, base.lastIndexOf('.'));
+			}
+			var tmp = File.createTempFile("droid64_" + base.replaceAll("[^A-Za-z0-9_-]", "_") + "_", ".tap");
+			tmp.deleteOnExit();
+			Files.write(tmp.toPath(), data);
+			execArgs.set(execArgs.size() - 1, tmp.getPath() + ":" + last.substring(prefix.length()));
+			mainPanel.appendConsole("Tape: starting from a copy of the tape which begins at this program: " + tmp);
+		} catch (IOException e) {	//NOSONAR
+			mainPanel.appendConsole("Tape: cannot write the temporary tape: " + e.getMessage());
 		}
 	}
 
