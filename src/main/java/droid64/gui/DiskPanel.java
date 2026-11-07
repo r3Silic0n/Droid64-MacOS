@@ -758,6 +758,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		try {
 			var list = Utility.getZipFileEntries(file, 2);
 			clearDirTable();
+			imageLoaded = false;
 			var parent = new DirEntry(file.getParentFile(), 1);
 			parent.setName(PARENT_DIR);
 			tableModel.updateDirEntry(parent);
