@@ -15,6 +15,7 @@ import java.io.File;
 import java.util.Date;
 
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFormattedTextField;
 import javax.swing.JLabel;
@@ -51,11 +52,16 @@ public class HexViewPanel extends JPanel {
 
 	private static final long serialVersionUID = 1L;
 
-	private static final String ASM_MODE = Utility.getMessage(Resources.DROID64_HEXVIEW_ASMMODE);
+	private static final String ASM_MODE = "View Asm";
+	private static final String BASIC_MODE = "View Basic";
+	private static final String TEXT_MODE = "View Text";
 	private static final int MAX_BASIC_LINE = 48;
-	private static final String HEX_MODE = Utility.getMessage(Resources.DROID64_HEXVIEW_HEXMODE);
+	private static final String HEX_MODE = "View Hex";
 	private final MainPanel mainPanel;
-	private final JButton modeButton = new JButton(HEX_MODE);
+	/** chooses what the window shows: hex dump (default), 6502 code, BASIC listing, or the text window */
+	private final JComboBox<String> viewBox = new JComboBox<>();
+	private String mode = HEX_MODE;
+	private final JTextArea basicTextArea = new JTextArea();
 	private final JTextArea asmTextArea = new JTextArea();
 	private final JPanel cards = new JPanel(new CardLayout());
 	private final HexTableModel model = new HexTableModel() {
@@ -95,8 +101,6 @@ public class HexViewPanel extends JPanel {
 	private int selectedSector = -1;
 
 	private int pos = 0;
-	private int viewLength;
-	private boolean viewReadLoadAddr;
 
 	/**
 	 * Constructor for disk image block
@@ -193,17 +197,7 @@ public class HexViewPanel extends JPanel {
 		dialog.setVisible(true);
 	}
 
-	/** Show the disassembly instead of the hex dump when the window opens. */
-	public HexViewPanel startInAsmMode() {
-		if (isHexMode()) {
-			switchHexAsmMode(viewLength, viewReadLoadAddr);
-		}
-		return this;
-	}
-
 	private void setup(byte[] data, int length, String label, boolean readLoadAddr) {
-		this.viewLength = length;
-		this.viewReadLoadAddr = readLoadAddr;
 
 		model.loadData(data, length);
 		table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -231,6 +225,11 @@ public class HexViewPanel extends JPanel {
 		// Setup cards
 		cards.add(new JScrollPane(table), HEX_MODE);
 		cards.add(asmScrollPane, ASM_MODE);
+		basicTextArea.setEditable(false);
+		basicTextArea.setFont(getTableFont(false));
+		var basicScrollPane = new JScrollPane(basicTextArea);
+		GuiHelper.keyNavigateTextArea(basicTextArea, basicScrollPane);
+		cards.add(basicScrollPane, BASIC_MODE);
 		add(cards, BorderLayout.CENTER);
 
 		add(drawButtons(length, readLoadAddr, label), BorderLayout.SOUTH);
@@ -363,8 +362,24 @@ public class HexViewPanel extends JPanel {
 	}
 
 	private JPanel drawButtons(final int length, final boolean readLoadAddr, final String fileName) {
-		modeButton.setMnemonic('m');
-		modeButton.addActionListener(ae -> switchHexAsmMode(length, readLoadAddr));
+		viewBox.addItem(HEX_MODE);
+		viewBox.addItem(ASM_MODE);
+		if (diskImage == null) {
+			viewBox.addItem(BASIC_MODE);
+			if (fileName != null && !fileName.isEmpty()) {
+				viewBox.addItem(TEXT_MODE);
+			}
+		}
+		viewBox.setToolTipText("Hex dump (default), 6502 code, BASIC listing, or the file as plain text");
+		viewBox.addActionListener(ae -> {
+			var chosen = (String) viewBox.getSelectedItem();
+			if (TEXT_MODE.equals(chosen)) {
+				viewBox.setSelectedItem(mode);
+				new TextViewPanel(mainPanel).show(data, DroiD64.PROGNAME, fileName);
+			} else if (chosen != null && !chosen.equals(mode)) {
+				selectMode(chosen, length, readLoadAddr);
+			}
+		});
 		c64ModeButton.setMnemonic('c');
 		c64ModeButton.addActionListener(ae -> switchFont(c64ModeButton.isSelected()));
 
@@ -386,15 +401,8 @@ public class HexViewPanel extends JPanel {
 		applyButton.setMnemonic('a');
 		applyButton.addActionListener(ae-> applyData());
 
-		var textButton = new JButton("View Text");
-		textButton.setToolTipText("Show the file as plain text");
-		textButton.addActionListener(ae -> new TextViewPanel(mainPanel).show(data, DroiD64.PROGNAME, fileName));
-
 		var buttonPanel = new JPanel();
-		buttonPanel.add(modeButton);
-		if (diskImage == null && fileName != null && !fileName.isEmpty()) {
-			buttonPanel.add(textButton);
-		}
+		buttonPanel.add(viewBox);
 		buttonPanel.add(c64ModeButton);
 		buttonPanel.add(printButton);
 		buttonPanel.add(saveButton);
@@ -413,32 +421,41 @@ public class HexViewPanel extends JPanel {
 		} else {
 			c64Modes[1] = useCbmFont;
 			asmTextArea.setFont(getTableFont(useCbmFont));
+			basicTextArea.setFont(getTableFont(useCbmFont));
 		}
 	}
 
 	private boolean isHexMode() {
-		return HEX_MODE.equals(modeButton.getText());
+		return HEX_MODE.equals(mode);
 	}
 
-	private void switchHexAsmMode(int length, boolean readLoadAddr) {
+	/** @return the text area of the listing which is shown (asm or BASIC) */
+	private JTextArea listingArea() {
+		return BASIC_MODE.equals(mode) ? basicTextArea : asmTextArea;
+	}
+
+	private void selectMode(String newMode, int length, boolean readLoadAddr) {
+		mode = newMode;
+		if (ASM_MODE.equals(newMode) && Utility.EMPTY.equals(asmTextArea.getText())) {
+			asmTextArea.setText(ProgramParser.parse(data, length, readLoadAddr));
+			asmTextArea.setCaretPosition(0);
+		} else if (BASIC_MODE.equals(newMode) && Utility.EMPTY.equals(basicTextArea.getText())) {
+			var basic = droid64.d64.BasicParser.parseCbmBasicPrg(data);
+			basicTextArea.setText(basic == null || basic.isEmpty() ? "No BASIC program found." : basic);
+			basicTextArea.setCaretPosition(0);
+		}
 		if (isHexMode()) {
-			// from hex mode to asm mode
-			modeButton.setText(ASM_MODE);
-			if (Utility.EMPTY.equals(asmTextArea.getText())) {
-				String code = ProgramParser.parse(data, length, readLoadAddr);
-				asmTextArea.setText(code);
-				asmTextArea.setCaretPosition(0);
-			}
-			switchFont(c64Modes[1]);
-		} else {
-			modeButton.setText(HEX_MODE);
 			switchFont(c64Modes[0]);
 			resizeTable(c64ModeButton.isSelected());
+		} else {
+			switchFont(c64Modes[1]);
 		}
-
 		asmTextArea.setSize(table.getSize());
 		CardLayout cl = (CardLayout) cards.getLayout();
-		cl.show(cards, modeButton.getText());
+		cl.show(cards, mode);
+		if (!newMode.equals(viewBox.getSelectedItem())) {
+			viewBox.setSelectedItem(newMode);
+		}
 	}
 
 	private void resizeTable(boolean useCbmFont) {
@@ -477,7 +494,7 @@ public class HexViewPanel extends JPanel {
 		String ftitle = hexMode ? Utility.getMessage(Resources.DROID64_HEXVIEW_SAVEHEX) : Utility.getMessage(Resources.DROID64_HEXVIEW_SAVEASM);
 		String fname = FileDialogHelper.openTextFileDialog(ftitle, null, fileName, true, ext);
 		if (fname != null) {
-			String outString = hexMode ? Utility.hexDump(data) : asmTextArea.getText();
+			String outString = hexMode ? Utility.hexDump(data) : listingArea().getText();
 			if (!outString.isEmpty()) {
 				writeToFile(new File(fname), outString);
 			}
@@ -521,7 +538,7 @@ public class HexViewPanel extends JPanel {
 			if (useCbmfont) {
 				header = header.toUpperCase();
 			}
-			job.setPageable(new PrintPageable(header + asmTextArea.getText(), "; " + title, useCbmfont, true, mainPanel));
+			job.setPageable(new PrintPageable(header + listingArea().getText(), "; " + title, useCbmfont, true, mainPanel));
 		}
 		mainPanel.appendConsole("Print " + (hexmode ? "hex" : "asm") + " mode using " + (useCbmfont ? "C64" : "system") + " font");
 		if (job.printDialog()) {

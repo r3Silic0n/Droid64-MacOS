@@ -586,64 +586,8 @@ public class MainPanel implements Serializable {
 		});
 	}
 
-	private String viewMode = "View Hex";
-
-	/** The first view button: it runs the chosen view, and the arrow beside it chooses (hex is the default). */
-	private JPanel createViewDropDown() {
-		var panel = new JPanel(new java.awt.BorderLayout(0, 0));
-		panel.setOpaque(false);
-		var main = new FlatStyle.Button(viewMode);
-		main.setMargin(BUTTON_MARGINS);
-		main.setToolTipText("Show the selected file: hex dump (default), 6502 code, BASIC listing or text. Use the arrow to choose.");
-		var arrow = new FlatStyle.Button("\u25be");
-		arrow.setMargin(new java.awt.Insets(BUTTON_MARGINS.top, 2, BUTTON_MARGINS.bottom, 2));
-		arrow.setToolTipText("Choose the kind of view");
-		setButtonColor(main, ActionButton.VIEW_TEXT_BUTTON);
-		setButtonColor(arrow, ActionButton.VIEW_TEXT_BUTTON);
-		Runnable run = () -> {
-			try {
-				var diskPanel = getActiveDiskPanel();
-				if (diskPanel == null) {
-					return;
-				}
-				switch (viewMode) {
-				case "View Asm":
-					diskPanel.asmViewFile();
-					break;
-				case "View Basic":
-					diskPanel.basicViewFile();
-					break;
-				case "View Text":
-					diskPanel.showFile();
-					break;
-				default:
-					diskPanel.hexViewFile();
-					break;
-				}
-			} catch (Exception | OutOfMemoryError ex) {
-				GuiHelper.showException(getParent(), "Error", ex, "Failed to open file.");
-			}
-		};
-		main.addActionListener(e -> run.run());
-		var menu = new javax.swing.JPopupMenu();
-		for (var mode : new String[] { "View Hex", "View Asm", "View Basic", "View Text" }) {
-			var item = new javax.swing.JMenuItem(mode);
-			item.addActionListener(e -> {
-				viewMode = mode;
-				main.setText(mode);
-				run.run();
-			});
-			menu.add(item);
-		}
-		arrow.addActionListener(e -> menu.show(main, 0, main.getHeight()));
-		panel.add(main, java.awt.BorderLayout.CENTER);
-		panel.add(arrow, java.awt.BorderLayout.EAST);
-		buttonMap.put(ActionButton.VIEW_TEXT_BUTTON, panel);
-		return panel;
-	}
-
 	private void createViewFileButtons() {
-		createViewDropDown();
+		var viewTextButton = createButton(ActionButton.VIEW_TEXT_BUTTON, null);
 		var hexViewButton = createButton(ActionButton.PLAY_MUSIC_BUTTON, null);
 		var dirTxtButton = createButton(ActionButton.DIR_TXT_BUTTON, null);
 		var hexEditButton = createButton(ActionButton.HEX_EDIT_BUTTON, null);
@@ -654,6 +598,8 @@ public class MainPanel implements Serializable {
 			var cmd = event.getActionCommand();
 			if (diskPanel == null || cmd == null) {
 				return;
+			} else if (viewTextButton.getActionCommand().equals(cmd)) {
+				diskPanel.showFile();
 			} else if (hexViewButton.getActionCommand().equals(cmd)) {
 				diskPanel.playMusic();
 			} else if (hexEditButton.getActionCommand().equals(cmd)) {
@@ -667,6 +613,7 @@ public class MainPanel implements Serializable {
 				GuiHelper.showException(getParent(), "Error", ex, "Failed to open file.");
 			}
 		};
+		viewTextButton.addActionListener(viewListener);
 		hexViewButton.addActionListener(viewListener);
 		dirTxtButton.addActionListener(viewListener);
 		hexEditButton.addActionListener(viewListener);
