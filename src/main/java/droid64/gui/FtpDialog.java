@@ -5,11 +5,9 @@ import java.awt.GridLayout;
 
 import javax.swing.JDialog;
 import javax.swing.JLabel;
-import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
-import javax.swing.JPopupMenu;
 import javax.swing.JTextField;
 
 /** The FTP window ("lister window") and the entry point that opens FTP where the Settings say. */
@@ -33,23 +31,63 @@ public final class FtpDialog extends JDialog {
 			newConnection(mainPanel, target);
 			return;
 		}
-		var menu = new JPopupMenu("FTP");
-		for (var s : sites) {
-			var item = new JMenuItem(s[FtpSites.NAME] + "   (" + s[FtpSites.USER] + "@" + s[FtpSites.HOST] + ")");
-			item.addActionListener(e -> {
-				if (target != null) {
-					target.openFtp(s);
-				} else {
-					show(mainPanel, s[FtpSites.NAME]);
-				}
-			});
-			menu.add(item);
+		var model = new javax.swing.DefaultListModel<String>();
+		for (var site : sites) {
+			model.addElement(site[FtpSites.NAME] + "   (" + site[FtpSites.USER] + "@" + site[FtpSites.HOST] + ")");
 		}
-		menu.addSeparator();
-		var other = new JMenuItem("New connection...");
-		other.addActionListener(e -> newConnection(mainPanel, target));
-		menu.add(other);
-		menu.show(anchor, 0, anchor.getHeight());
+		var listBox = new javax.swing.JList<>(model);
+		listBox.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+		listBox.setSelectedIndex(0);
+		listBox.setVisibleRowCount(Math.min(10, Math.max(4, sites.size())));
+		var dlg = new JDialog(mainPanel.getParent(), "FTP - choose an address", java.awt.Dialog.ModalityType.APPLICATION_MODAL);
+		final int[] choice = { -1 };
+		Runnable connect = () -> {
+			choice[0] = listBox.getSelectedIndex();
+			dlg.dispose();
+		};
+		listBox.addMouseListener(new java.awt.event.MouseAdapter() {
+			@Override
+			public void mouseClicked(java.awt.event.MouseEvent e) {
+				if (e.getClickCount() == 2 && listBox.getSelectedIndex() >= 0) {
+					connect.run();
+				}
+			}
+		});
+		var connectButton = new javax.swing.JButton("Connect");
+		connectButton.addActionListener(e -> connect.run());
+		var newButton = new javax.swing.JButton("New...");
+		newButton.addActionListener(e -> {
+			choice[0] = -2;
+			dlg.dispose();
+		});
+		var cancelButton = new javax.swing.JButton("Cancel");
+		cancelButton.addActionListener(e -> dlg.dispose());
+		var buttons = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 4, 4));
+		buttons.add(connectButton);
+		buttons.add(newButton);
+		buttons.add(cancelButton);
+		var content = new JPanel(new java.awt.BorderLayout(4, 4));
+		content.setBorder(javax.swing.BorderFactory.createEmptyBorder(6, 6, 2, 6));
+		content.add(new javax.swing.JScrollPane(listBox), java.awt.BorderLayout.CENTER);
+		content.add(buttons, java.awt.BorderLayout.SOUTH);
+		dlg.setContentPane(content);
+		dlg.getRootPane().setDefaultButton(connectButton);
+		dlg.getRootPane().registerKeyboardAction(e -> dlg.dispose(), javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0),
+				javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW);
+		dlg.pack();
+		dlg.setMinimumSize(new java.awt.Dimension(320, 0));
+		dlg.setLocationRelativeTo(mainPanel.getParent());
+		dlg.setVisible(true);
+		if (choice[0] == -2) {
+			newConnection(mainPanel, target);
+		} else if (choice[0] >= 0 && choice[0] < sites.size()) {
+			var site = sites.get(choice[0]);
+			if (target != null) {
+				target.openFtp(site);
+			} else {
+				show(mainPanel, site[FtpSites.NAME]);
+			}
+		}
 	}
 
 	/** A connection that is not saved yet: in the FTP window, or (target given) as a folder in a list. */
