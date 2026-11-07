@@ -431,6 +431,24 @@ public class ExternalProgram {
 	}
 
 	/**
+	 * The working folder of a started program. A program that stays running (an emulator) with its working folder on a
+	 * removable volume (/Volumes/...) would prevent the volume from being ejected, so the home folder is used instead.
+	 */
+	private static File workingFolder(File folder) {
+		if (folder == null) {
+			return new File(".");
+		}
+		var path = folder.getAbsolutePath();
+		if (path.startsWith("/Volumes/")) {
+			var home = System.getProperty("user.home");
+			if (home != null && new File(home).isDirectory()) {
+				return new File(home);
+			}
+		}
+		return folder;
+	}
+
+	/**
 	 * @param folder the current folder for the command
 	 * @param execArgs the command and its arguments
 	 * @param outputConsumer consumer of the output
@@ -441,7 +459,7 @@ public class ExternalProgram {
 		int returnCode=1;
 		try {
 			var builder = new ProcessBuilder()
-					.directory(folder != null ? folder : new File("."))
+					.directory(workingFolder(folder))
 					.redirectOutput(Redirect.PIPE)
 					.redirectErrorStream(true)
 					.command(execArgs);
