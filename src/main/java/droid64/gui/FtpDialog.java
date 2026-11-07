@@ -31,6 +31,15 @@ public final class FtpDialog extends JDialog {
 			newConnection(mainPanel, target);
 			return;
 		}
+		if (sites.size() == 1) {
+			// only one address: connect to it at once
+			if (target != null) {
+				target.openFtp(sites.get(0));
+			} else {
+				show(mainPanel, sites.get(0)[FtpSites.NAME]);
+			}
+			return;
+		}
 		var model = new javax.swing.DefaultListModel<String>();
 		for (var site : sites) {
 			model.addElement(site[FtpSites.NAME] + "   (" + site[FtpSites.USER] + "@" + site[FtpSites.HOST] + ")");
