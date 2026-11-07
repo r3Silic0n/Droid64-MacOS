@@ -95,6 +95,8 @@ public class HexViewPanel extends JPanel {
 	private int selectedSector = -1;
 
 	private int pos = 0;
+	private int viewLength;
+	private boolean viewReadLoadAddr;
 
 	/**
 	 * Constructor for disk image block
@@ -191,7 +193,17 @@ public class HexViewPanel extends JPanel {
 		dialog.setVisible(true);
 	}
 
+	/** Show the disassembly instead of the hex dump when the window opens. */
+	public HexViewPanel startInAsmMode() {
+		if (isHexMode()) {
+			switchHexAsmMode(viewLength, viewReadLoadAddr);
+		}
+		return this;
+	}
+
 	private void setup(byte[] data, int length, String label, boolean readLoadAddr) {
+		this.viewLength = length;
+		this.viewReadLoadAddr = readLoadAddr;
 
 		model.loadData(data, length);
 		table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);

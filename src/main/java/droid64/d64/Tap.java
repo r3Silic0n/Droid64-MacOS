@@ -106,6 +106,15 @@ public class Tap extends T64 {
 
 	/** @return the pulse lengths in cycles */
 	static int[] pulses(byte[] d) {
+		var out = rawPulses(d);
+		if (isPlus4(d)) {
+			return joinHalfWaves(out, out.length, null);
+		}
+		return out;
+	}
+
+	/** @return the lengths of the pulses (C64: pulses, C16 / Plus/4: half waves) in cycles, as stored in the file */
+	static int[] rawPulses(byte[] d) {
 		if (d == null || d.length < 20 || !(new String(d, 0, SIGNATURE.length()).equals(SIGNATURE) || isPlus4(d))) {
 			return new int[0];
 		}
@@ -124,9 +133,6 @@ public class Tap extends T64 {
 				out[n++] = 256 * 8;
 			}
 		}
-		if (isPlus4(d)) {
-			return joinHalfWaves(out, n);
-		}
 		return java.util.Arrays.copyOf(out, n);
 	}
 
@@ -139,14 +145,20 @@ public class Tap extends T64 {
 	 * Two half waves make one pulse. The two halves of a wave are about the same length, so a stray half wave
 	 * (which would shift every following pair) is dropped; a long gap stands alone.
 	 */
-	private static int[] joinHalfWaves(int[] h, int n) {
+	private static int[] joinHalfWaves(int[] h, int n, int[] firstHalf) {
 		var out = new int[n + 2];
 		int m = 0;
 		int i = 0;
 		while (i < n) {
 			if (h[i] > 3000) {
+				if (firstHalf != null) {
+					firstHalf[m] = i;
+				}
 				out[m++] = h[i++];
 			} else if (i + 1 < n && h[i + 1] <= 3000 && h[i + 1] * 100L < h[i] * 170L && h[i] * 100L < h[i + 1] * 170L) {
+				if (firstHalf != null) {
+					firstHalf[m] = i;
+				}
 				out[m++] = h[i] + h[i + 1];
 				i += 2;
 			} else {
@@ -165,8 +177,10 @@ public class Tap extends T64 {
 	}
 
 	static List<Program> decode(byte[] tap) {
-		var p = pulses(tap);
 		boolean plus4 = isPlus4(tap);
+		var halfWaves = rawPulses(tap);
+		int[] firstHalf = plus4 ? new int[halfWaves.length + 2] : null;
+		var p = plus4 ? joinHalfWaves(halfWaves, halfWaves.length, firstHalf) : halfWaves;
 		var blocks = new ArrayList<Block>();
 		int i = 0;
 		int n = p.length;
@@ -268,10 +282,193 @@ public class Tap extends T64 {
 		var programs = assemble(blocks);
 		if (!plus4) {
 			applyTurbo(programs, p);
+		} else {
+			applyTurboPlus4(programs, p, firstHalf, halfWaves);
 		}
 		return programs;
 	}
 
+
+	// ---- Plus/4 turbo loader (a 256 byte loader at $0100 in the header + data blocks, then the turbo data) ----
+
+	/** first bytes of the Plus/4 turbo loader (it is loaded at $0100 by the normal kernal routine) */
+	private static final int[] LOADER_P4 = { 0x60, 0x00, 0xea, 0xa2, 0xf8, 0x9a, 0x20, 0x1b, 0xe3, 0xb0, 0x5a };
+	/** a full wave shorter than this is a 0 bit, a longer one is a 1 bit (the timer of the loader counts 256) */
+	private static final int P4_ONE = 300;
+	private static final int P4_PILOT = 100;
+
+	private static boolean hasTurboLoaderP4(Program p) {
+		if (p.data.length != 256 || p.start != 0x100) {
+			return false;
+		}
+		for (int i = 0; i < LOADER_P4.length; i++) {
+			if ((p.data[i] & 255) != LOADER_P4[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** Reads bits from the half waves of the tape (two make a wave); a bit is 0 for a short wave. Returns -1 at the end. */
+	private static final class PulseBits {
+		final int[] h;
+		int i;
+		final int end;
+
+		PulseBits(int[] h, int start, int end) {
+			this.h = h;
+			this.i = start;
+			this.end = end;
+		}
+
+		int bit() {
+			if (i + 1 >= end) {
+				return -1;
+			}
+			int v = h[i] + h[i + 1] < P4_ONE ? 0 : 1;
+			i += 2;
+			return v;
+		}
+
+		/** @return byte, least significant bit first, or -1 */
+		int read() {
+			int v = 0;
+			for (int k = 0; k < 8; k++) {
+				int b = bit();
+				if (b < 0) {
+					return -1;
+				}
+				v |= b << k;
+			}
+			return v;
+		}
+	}
+
+	/**
+	 * Replace the loader stubs of Plus/4 programs with the data which follows them on the tape: a pilot of short waves,
+	 * a sync byte $A8, then blocks of: address (high, low), page count + 1, length of the first page, checksum of these,
+	 * then the pages each followed by an XOR checksum. A last byte tells if another block follows.
+	 * The waves of this data are not symmetric (a long and a short half), so the half waves are used as they are.
+	 */
+	private static void applyTurboPlus4(List<Program> programs, int[] p, int[] firstHalf, int[] raw) {
+		for (int k = 0; k < programs.size(); k++) {
+			var prog = programs.get(k);
+			if (!hasTurboLoaderP4(prog)) {
+				continue;
+			}
+			int start = firstHalf[prog.pos];
+			int end = k + 1 < programs.size() ? firstHalf[programs.get(k + 1).pos] : raw.length;
+			readTurboP4(prog, raw, start, end);
+		}
+	}
+
+	private static void readTurboP4(Program prog, int[] h, int from, int end) {
+		int idx = from;
+		int zeros = 0;
+		while (idx + 1 < end && zeros < P4_PILOT) {
+			if (h[idx] + h[idx + 1] < P4_ONE && h[idx] > h[idx + 1]) {
+				zeros++;
+				idx += 2;
+			} else {
+				zeros = 0;
+				idx++;
+			}
+		}
+		prog.data = new byte[0];
+		prog.damaged = true;
+		if (zeros < P4_PILOT) {
+			return;
+		}
+		var in = new PulseBits(h, idx, end);
+		int a7 = 0;
+		boolean sync = false;
+		while (!sync) {
+			int b = in.bit();
+			if (b < 0) {
+				break;
+			}
+			a7 = (a7 >> 1) | b << 7;
+			sync = a7 == 0xa8;
+		}
+		if (!sync) {
+			return;
+		}
+		var mem = new byte[65536];
+		// blocks at $1000 and above are the program; blocks below (zero page, stack, system variables) restore the
+		// state of the machine after loading and are not part of the program
+		int low = 65536;
+		int high = -1;
+		int lowAny = 65536;
+		int highAny = -1;
+		boolean okMain = true;
+		boolean ok = true;
+		boolean more = true;
+		while (more && ok) {
+			int[] hdr = new int[5];
+			int x = 0;
+			for (int q = 0; q < 5; q++) {
+				hdr[q] = in.read();
+				if (hdr[q] < 0) {
+					ok = false;
+					break;
+				}
+				x ^= hdr[q];
+			}
+			if (!ok || x != 0) {
+				ok = false;
+				break;
+			}
+			int addr = hdr[0] << 8 | hdr[1];
+			boolean main = addr >= 0x0f00;
+			int chunks = (hdr[2] == 0 ? 256 : hdr[2]) - 1;
+			boolean badBlock = false;
+			for (int c = 0; c < chunks && ok; c++) {
+				int len = c == 0 ? (hdr[3] == 0 ? 256 : hdr[3]) : 256;
+				x = 0;
+				for (int q = 0; q < len; q++) {
+					int v = in.read();
+					if (v < 0) {
+						ok = false;
+						break;
+					}
+					x ^= v;
+					int a = (addr + q) & 0xffff;
+					mem[a] = (byte) v;
+					lowAny = Math.min(lowAny, a);
+					highAny = Math.max(highAny, a);
+					if (main) {
+						low = Math.min(low, a);
+						high = Math.max(high, a);
+					}
+				}
+				addr += len;
+				int chk = ok ? in.read() : -1;
+				if (chk < 0) {
+					ok = false;
+				} else if (chk != x) {
+					badBlock = true;	// a wrong bit; the following data is still in step, so go on
+				}
+			}
+			if (main) {
+				okMain = okMain && ok && !badBlock;
+			}
+			if (ok) {
+				more = in.read() > 0;
+			}
+		}
+		if (high < low) {
+			low = lowAny;
+			high = highAny;
+		}
+		if (high >= low) {
+			if (low <= 0x1000 && high > 0x1001 && mem[0x1000] == 0 && low >= 0x0f00) {
+				low = 0x1001;	// the zero byte in front of a BASIC program is not part of the PRG file
+			}
+			prog.start = low;
+			prog.data = java.util.Arrays.copyOfRange(mem, low, high + 1);
+			prog.damaged = !okMain;
+		}
+	}
 
 	// ---- turbo loader (the "0x02 pilot" loader which sits in the header block of every file) ----
 

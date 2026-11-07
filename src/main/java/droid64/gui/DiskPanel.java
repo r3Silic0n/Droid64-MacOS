@@ -856,6 +856,11 @@ public class DiskPanel extends JPanel implements TableModelListener {
 					filesCopied = true;
 					mainPanel.appendConsole("Disk copy [" + row + "] " + tableModel.getValueAt(row, 2));
 					var saveData = diskImage.getFileData(row);
+					if (saveData == null) {
+						mainPanel.appendConsole("No data, skipped: " + tableModel.getValueAt(row, 2));
+						success = true;
+						continue;
+					}
 					var source = diskImage.getCbmFile(row);
 					CbmFile copy;
 					if (source instanceof CpmFile) {
@@ -1155,6 +1160,20 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		}
 		String name = getName(fileNum);
 		new HexViewPanel(DroiD64.PROGNAME+" - Hex view", mainPanel, name, data, data.length, true).showDialog();
+	}
+
+	/** Show the selected files as 6502 code (the hex view window in assembler mode). */
+	public void asmViewFile() {
+		for (var i : table.getSelectedRows()) {
+			var name = getName(i);
+			mainPanel.appendConsole("Asm view '" + name + "'");
+			var data = getFileData(i);
+			if (data == null || data.length == 0) {
+				mainPanel.appendConsole("No data");
+				continue;
+			}
+			new HexViewPanel(DroiD64.PROGNAME + " - Asm view", mainPanel, name, data, data.length, true).startInAsmMode().showDialog();
+		}
 	}
 
 	public void basicViewFile() {
