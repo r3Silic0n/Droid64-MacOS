@@ -491,8 +491,9 @@ public class HexViewPanel extends JPanel {
 	}
 
 	private void saveText(byte[] data, String fileName, boolean hexMode) {
-		String[] ext = hexMode ? new String[] {".txt", ".asm"} : new String[] {".asm", ".txt"};
-		String ftitle = hexMode ? Utility.getMessage(Resources.DROID64_HEXVIEW_SAVEHEX) : Utility.getMessage(Resources.DROID64_HEXVIEW_SAVEASM);
+		boolean basic = BASIC_MODE.equals(mode);
+		String[] ext = hexMode ? new String[] {".txt", ".asm"} : basic ? new String[] {".bas", ".txt"} : new String[] {".asm", ".txt"};
+		String ftitle = hexMode ? Utility.getMessage(Resources.DROID64_HEXVIEW_SAVEHEX) : basic ? "Save BASIC file" : Utility.getMessage(Resources.DROID64_HEXVIEW_SAVEASM);
 		String fname = FileDialogHelper.openTextFileDialog(ftitle, null, fileName, true, ext);
 		if (fname != null) {
 			String outString = hexMode ? Utility.hexDump(data) : listingArea().getText();
@@ -541,7 +542,7 @@ public class HexViewPanel extends JPanel {
 			}
 			job.setPageable(new PrintPageable(header + listingArea().getText(), "; " + title, useCbmfont, true, mainPanel));
 		}
-		mainPanel.appendConsole("Print " + (hexmode ? "hex" : "asm") + " mode using " + (useCbmfont ? "C64" : "system") + " font");
+		mainPanel.appendConsole("Print " + (hexmode ? "hex" : BASIC_MODE.equals(mode) ? "BASIC" : "asm") + " mode using " + (useCbmfont ? "C64" : "system") + " font");
 		if (job.printDialog()) {
 			try {
 				job.print();
