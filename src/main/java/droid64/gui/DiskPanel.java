@@ -563,7 +563,8 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		if (imageLoaded) {
 			if (zipFileLoaded) {
 				try {
-					var tmpfile = File.createTempFile("droid64_", ".img");
+					var origName = diskImage.getFile() != null ? diskImage.getFile().getName() : "";
+					var tmpfile = File.createTempFile("droid64_", origName.contains(".") ? origName.substring(origName.lastIndexOf('.')) : ".img");
 					tmpfile.deleteOnExit();
 					imgFile = tmpfile;
 					diskImage.saveAs(tmpfile);
@@ -601,6 +602,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			selectedFiles = onlyPrg;
 		}
 		var execArgs = prg.getExecute(imgFile, selectedFiles, otherPath, directory, imageType);
+		addTapeOffset(execArgs, prg);
 		File imgParentFile;
 		if (imgFile != null) {
 			imgParentFile = imgFile.getParentFile();
@@ -610,6 +612,27 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			imgParentFile = null;
 		}
 		prg.runProgram(imgParentFile, execArgs, mainPanel);
+	}
+
+	/**
+	 * A program of a TAP image: VICE would search for it from the start of the tape, loading every program in front of it.
+	 * Tell it where the program starts in the TAP file instead (what its Tape Browser does).
+	 */
+	private void addTapeOffset(List<String> execArgs, ExternalProgram prg) {
+		if (!imageLoaded || !(diskImage instanceof droid64.d64.Tap) || execArgs.size() < 4 || !"-drive8type".equals(execArgs.get(1))
+				|| prg.getArguments() == null || !prg.getArguments().contains("{ImageFiles}")) {
+			return;
+		}
+		var rows = table.getSelectedRows();
+		if (rows.length != 1) {
+			return;
+		}
+		int offset = ((droid64.d64.Tap) diskImage).getTapeOffset(rows[0]);
+		if (offset > 20) {
+			execArgs.add(execArgs.size() - 1, "-autostarttapoffset");
+			execArgs.add(execArgs.size() - 1, String.valueOf(offset));
+			mainPanel.appendConsole("Tape: starting at byte " + offset + " of the TAP file");
+		}
 	}
 
 	/** Name of a file as VICE expects it after "image:" - VICE maps ASCII to PETSCII (a-z to $41-$5A, A-Z to $C1-$DA). */

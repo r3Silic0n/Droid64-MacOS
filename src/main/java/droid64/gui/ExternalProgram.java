@@ -389,7 +389,8 @@ public class ExternalProgram {
 		int vicePort = ViceRemote.portFor(execArgs.isEmpty() ? "" : new File(execArgs.get(0)).getName());
 		if (vicePort > 0) {
 			var file = ViceRemote.startFile(execArgs);
-			if (file != null && ViceRemote.autostart(vicePort, file, mainPanel::appendConsole)) {
+			// a tape started at a position in the TAP file needs a new emulator: the running one cannot be told
+			if (file != null && !execArgs.contains("-autostarttapoffset") && ViceRemote.autostart(vicePort, file, mainPanel::appendConsole)) {
 				mainPanel.appendConsole("The running emulator was reset and started " + file);
 				return 0;
 			}

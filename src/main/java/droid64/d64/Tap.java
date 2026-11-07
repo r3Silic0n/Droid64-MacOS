@@ -38,10 +38,26 @@ public class Tap extends T64 {
 		/** index of the pulse where the header block starts */
 		int pos;
 		boolean seq;
+		/** position in the TAP file (bytes, header included) where the leader in front of the header starts, or -1 */
+		int fileOffset = -1;
 	}
 
 	private byte[] tapData;
 	private transient int turboBlocks;
+	private transient List<Program> programCache;
+
+	/**
+	 * Where a program starts in the TAP file: the position of the leader in front of its header, so that an emulator
+	 * can start the tape right there (VICE: -autostarttapoffset) instead of searching from the start of the tape.
+	 * @param fileNumber number of the file in the listing, from 0
+	 * @return byte position in the TAP file, or -1
+	 */
+	public int getTapeOffset(int fileNumber) {
+		if (programCache == null) {
+			programCache = decode(tapData);
+		}
+		return fileNumber >= 0 && fileNumber < programCache.size() ? programCache.get(fileNumber).fileOffset : -1;
+	}
 
 	public Tap(DiskImageType imageFormat, ConsoleStream consoleStream) {
 		super(imageFormat, consoleStream);
@@ -111,6 +127,24 @@ public class Tap extends T64 {
 			return joinHalfWaves(out, out.length, null);
 		}
 		return out;
+	}
+
+	/** @return the position in the file of every pulse of {@link #rawPulses(byte[])} */
+	static int[] rawPulseOffsets(byte[] d) {
+		if (d == null || d.length < 20) {
+			return new int[0];
+		}
+		int version = d[12] & 255;
+		int size = Math.min(Utility.getInt32(d, 16), d.length - 20);
+		var out = new int[size];
+		int n = 0;
+		for (int i = 0; i < size; i++) {
+			out[n++] = 20 + i;
+			if ((d[20 + i] & 255) == 0 && version >= 1 && i + 3 < size) {
+				i += 3;
+			}
+		}
+		return java.util.Arrays.copyOf(out, n);
 	}
 
 	/** @return the lengths of the pulses (C64: pulses, C16 / Plus/4: half waves) in cycles, as stored in the file */
@@ -280,6 +314,10 @@ public class Tap extends T64 {
 			}
 		}
 		var programs = assemble(blocks);
+		var fileOffsets = rawPulseOffsets(tap);
+		for (var prog : programs) {
+			prog.fileOffset = leaderOffset(p, prog.pos, plus4 ? firstHalf : null, fileOffsets);
+		}
 		if (!plus4) {
 			applyTurbo(programs, p);
 		} else {
@@ -288,6 +326,25 @@ public class Tap extends T64 {
 		return programs;
 	}
 
+
+	/** @return file position of the start of the leader (pulses like the ones just before the sync) before pulse pos */
+	private static int leaderOffset(int[] p, int pos, int[] firstHalf, int[] fileOffsets) {
+		if (pos < 1 || pos > p.length) {
+			return -1;
+		}
+		int from = Math.max(0, pos - 30);
+		double ref = 0;
+		for (int k = from; k < pos; k++) {
+			ref += p[k];
+		}
+		ref /= pos - from;
+		int k = pos;
+		while (k > 0 && Math.abs(p[k - 1] - ref) <= ref * 0.15) {
+			k--;
+		}
+		int raw = firstHalf != null ? firstHalf[k] : k;
+		return raw >= 0 && raw < fileOffsets.length ? fileOffsets[raw] : -1;
+	}
 
 	// ---- Plus/4 turbo loader (a 256 byte loader at $0100 in the header + data blocks, then the turbo data) ----
 
