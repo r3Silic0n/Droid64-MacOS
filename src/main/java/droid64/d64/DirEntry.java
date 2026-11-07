@@ -78,6 +78,17 @@ public class DirEntry implements Serializable {
 		isImageFile = isFile && Setting.isImageFileName(file);
 	}
 
+	/** An entry of a remote (FTP) folder. */
+	public DirEntry(String remoteName, boolean directory, long size, int fileNum) {
+		number = fileNum;
+		name = remoteName;
+		blocks = (int) Math.min(Integer.MAX_VALUE, size);
+		isFile = !directory;
+		type = directory ? "DIR" : "FILE";
+		flags = directory ? "d--" : "r--";
+		isImageFile = isFile && Setting.isImageFileName(new File(remoteName));
+	}
+
 	public DirEntry(File zipFile, ZipEntry zipEntry, int fileNum) {
 		number = fileNum;
 		name = zipEntry.getName();

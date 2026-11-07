@@ -114,9 +114,17 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	private File currentImagePath = null;
 
 	private final JPanel diskLabelPane = new JPanel();
-	/** The normal content of the list, and the FTP browser that can replace it */
-	private JPanel dirPanelMain;
-	private transient FtpPanel ftpPanel;
+	/** FTP view: the list shows a folder of an FTP server */
+	private boolean ftpMode = false;
+	private transient droid64.net.FtpClient ftp;
+	private String ftpPath = "/";
+	private String ftpHost = "";
+	private String ftpDownloadDir = "";
+	private final transient java.util.concurrent.ExecutorService ftpWorker = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+		var t = new Thread(r, "ftp-list");
+		t.setDaemon(true);
+		return t;
+	});
 
 	/** True when a disk image is loaded */
 	private boolean imageLoaded = false;
@@ -142,7 +150,6 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		rowHeight = Setting.FONT_SIZE.getInteger() + 2;
 
 		var dirPanel = drawDirPanel();
-		dirPanelMain = dirPanel;
 		setTableColors();
 		setLayout(new BorderLayout());
 		add(dirPanel, BorderLayout.CENTER);
@@ -175,29 +182,182 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		otherDiskPanel.setTableColors();
 	}
 
-	/** Show the FTP browser in this list instead of the files. */
-	public void showFtp() {
-		if (ftpPanel == null) {
-			ftpPanel = new FtpPanel(mainPanel, this::hideFtp, () -> otherDiskPanel != null ? otherDiskPanel : this);
-			ftpPanel.setPreferredSize(new Dimension(50, 300));
-			remove(dirPanelMain);
-			add(ftpPanel, BorderLayout.CENTER);
-			revalidate();
-			repaint();
+	// ---- FTP view ----
+
+	private boolean ftpBlocked() {
+		if (ftpMode) {
+			mainPanel.appendConsole("Not available in the FTP view (use Copy File to download, or the FTP window for uploads and changes).");
+		}
+		return ftpMode;
+	}
+
+	public boolean isFtpMode() {
+		return ftpMode;
+	}
+
+	/** Connect to a saved site (see FtpSites) and show its folder in this list, like a folder of the file system. */
+	public void openFtp(String[] site) {
+		String pw = FtpSites.password(site);
+		var user = site[FtpSites.USER].isEmpty() ? "anonymous" : site[FtpSites.USER];
+		if (pw.isEmpty() && !"anonymous".equals(user)) {
+			var field = new javax.swing.JPasswordField(14);
+			if (JOptionPane.showConfirmDialog(this, field, "Password for " + user + "@" + site[FtpSites.HOST],
+					JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) {
+				return;
+			}
+			pw = new String(field.getPassword());
+		}
+		final var password = pw.isEmpty() ? "droid64@localhost" : pw;
+		int p = 21;
+		try {
+			p = Integer.parseInt(site[FtpSites.PORT].trim());
+		} catch (NumberFormatException e) {	//NOSONAR
+			p = 21;
+		}
+		final int port = p;
+		final var host = site[FtpSites.HOST];
+		final var remote = site[FtpSites.REMOTE];
+		ftpDownloadDir = site[FtpSites.LOCAL];
+		mainPanel.appendConsole("FTP: connecting to " + host + ":" + port + " ...");
+		ftpWorker.execute(() -> {
+			var cl = new droid64.net.FtpClient();
+			try {
+				cl.connect(host, port);
+				cl.login(user, password);
+				if (!remote.isEmpty()) {
+					try {
+						cl.cwd(remote);
+					} catch (IOException e) {
+						mainPanel.appendConsole("FTP: folder " + remote + " not found: " + e.getMessage());
+					}
+				}
+				final var path = cl.pwd();
+				final var list = cl.list();
+				SwingUtilities.invokeLater(() -> {
+					if (imageLoaded) {
+						unloadDisk();
+					}
+					leaveFtp();
+					ftp = cl;
+					ftpHost = host;
+					ftpMode = true;
+					showFtpEntries(path, list);
+					mainPanel.appendConsole("FTP: connected to " + host);
+				});
+			} catch (IOException | RuntimeException e) {
+				cl.close();
+				mainPanel.appendConsole("FTP: connect failed: " + e.getMessage());
+			}
+		});
+	}
+
+	private void showFtpEntries(String path, java.util.List<droid64.net.FtpClient.Entry> list) {
+		ftpPath = path;
+		clearDirTable();
+		int n = 0;
+		tableModel.updateDirEntry(new DirEntry(PARENT_DIR, true, 0, ++n));
+		var sorted = new ArrayList<>(list);
+		sorted.removeIf(e -> e.name.equals(".") || e.name.equals(".."));
+		sorted.sort((a, b) -> a.dir != b.dir ? (a.dir ? -1 : 1) : a.name.compareToIgnoreCase(b.name));
+		for (var e : sorted) {
+			tableModel.updateDirEntry(new DirEntry(e.name, e.dir, e.size, ++n));
+		}
+		tableModel.setMode(EntryTableModel.MODE_LOCAL);
+		var tcm = table.getTableHeader().getColumnModel();
+		for (int i = 0; i < tcm.getColumnCount(); i++) {
+			tcm.getColumn(i).setHeaderValue(tableModel.getColumnName(i));
+		}
+		setDiskName("ftp://" + ftpHost + path);
+		diskLabel.setText("FTP " + ftpHost);
+		setTableColors();
+		table.setColumnModel(tableModel.getTableColumnModel());
+		table.revalidate();
+		repaint();
+	}
+
+	private void ftpChangeDir(String name) {
+		var cl = ftp;
+		ftpWorker.execute(() -> {
+			try {
+				final String path;
+				final java.util.List<droid64.net.FtpClient.Entry> list;
+				synchronized (cl) {
+					if (name.equals(PARENT_DIR)) {
+						cl.cdup();
+					} else {
+						cl.cwd(name);
+					}
+					path = cl.pwd();
+					list = cl.list();
+				}
+				SwingUtilities.invokeLater(() -> {
+					if (ftp == cl) {
+						showFtpEntries(path, list);
+					}
+				});
+			} catch (IOException | RuntimeException e) {
+				mainPanel.appendConsole("FTP: " + e.getMessage());
+			}
+		});
+	}
+
+	/** One folder up; at the top of the server the FTP view is closed and the files come back. */
+	private void ftpUp() {
+		if ("/".equals(ftpPath) || ftpPath.isEmpty()) {
+			var dir = currentImagePath;
+			leaveFtp();
+			loadLocalDirectory(dir);
+		} else {
+			ftpChangeDir(PARENT_DIR);
 		}
 	}
 
-	/** Close the FTP browser and show the files again. */
-	public void hideFtp() {
-		if (ftpPanel != null) {
-			var p = ftpPanel;
-			ftpPanel = null;
-			p.shutdown();
-			remove(p);
-			add(dirPanelMain, BorderLayout.CENTER);
-			revalidate();
-			repaint();
-			table.requestFocus();
+	/** Drop the FTP connection (no change of the list). */
+	private void leaveFtp() {
+		if (ftpMode || ftp != null) {
+			var cl = ftp;
+			ftp = null;
+			ftpMode = false;
+			if (cl != null) {
+				ftpWorker.execute(cl::close);
+				mainPanel.appendConsole("FTP: disconnected.");
+			}
+		}
+	}
+
+	/** Download a file of the current FTP folder into memory. */
+	private byte[] ftpDownload(String name) throws IOException {
+		var cl = ftp;
+		if (cl == null) {
+			throw new IOException("Not connected.");
+		}
+		var out = new java.io.ByteArrayOutputStream();
+		synchronized (cl) {
+			cl.retrieve(name, out, null);
+		}
+		return out.toByteArray();
+	}
+
+	private void doubleClickedFtp(int row) throws IOException {
+		var name = (String) table.getValueAt(row, 1);
+		var entry = tableModel.getDirEntry(row);
+		if (PARENT_DIR.equals(name)) {
+			ftpUp();
+		} else if (entry != null && !entry.isFile()) {
+			ftpChangeDir(name);
+		} else if (entry != null && entry.isImageFile()) {
+			mainPanel.appendConsole("FTP: downloading " + name + " ...");
+			var data = ftpDownload(name);
+			var dir = ftpDownloadDir.isEmpty() ? new File(System.getProperty("java.io.tmpdir")) : new File(ftpDownloadDir);
+			var target = new File(dir, name.replaceAll("[\\\\/:]", "_"));
+			if (!Utility.writeFileSafe(target, data)) {
+				mainPanel.appendConsole("FTP: could not save " + target);
+				return;
+			}
+			mainPanel.appendConsole("FTP: saved " + target);
+			(otherDiskPanel != null ? otherDiskPanel : this).openDiskImage(target, true);
+		} else {
+			hexViewFile(row);
 		}
 	}
 
@@ -490,7 +650,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		}
 		try {
 			openedRow = null;
-			if (imageLoaded) {
+			if (ftpMode) {
+				doubleClickedFtp(row);
+			} else if (imageLoaded) {
 				doubleClickedImageFileEntry(diskImage.getCbmFile(row), row);
 			} else if (zipFileLoaded) {
 				String entryName = (String) table.getValueAt(row, 1);
@@ -773,6 +935,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	 * @param path to a directory to open
 	 */
 	public void loadLocalDirectory(File path) {
+		leaveFtp();
 		var dir = path != null ? path : Setting.DEFAULT_IMAGE_DIR.getFile();
 		if (dir.isDirectory()) {
 			mainPanel.appendConsole("loadLocalDirectory: "+dir.getAbsolutePath());
@@ -888,6 +1051,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 	/** Copy the selected files to the other panel, then delete them from this one. */
 	public void moveFile() {
+		if (ftpBlocked()) {
+			return;
+		}
 		if (zipFileLoaded) {
 			mainPanel.appendConsole("Error: moving from Zip files not supported.");
 			return;
@@ -953,7 +1119,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 				if (success && otherDiskPanel.imageLoaded) {
 					otherDiskPanel.diskImage.save();
 				}
-			} else if (zipFileLoaded) {
+			} else if (zipFileLoaded || ftpMode) {
 				for (var row = 0; row < table.getRowCount(); row++) {
 					if (table.isRowSelected(row)) {
 						var filename = (String) tableModel.getValueAt(row, 1);
@@ -1083,6 +1249,8 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		try {
 			if (imageLoaded) {
 				return diskImage.getFileData(fileNum);
+			} else if (ftpMode) {
+				return ftpDownload((String) table.getValueAt(fileNum, 1));
 			} else if (zipFileLoaded) {
 				return Utility.getDataFromZipFileEntry(currentImagePath, (String) table.getValueAt(fileNum, 1));
 			} else {
@@ -1480,6 +1648,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	public void renameDisk() {
+		if (ftpBlocked()) {
+			return;
+		}
 		mainPanel.appendConsole("Rename disk.");
 		if (diskImage == null || diskImage.getBam() == null) {
 			return;
@@ -1508,6 +1679,10 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	public void unloadDisk() {
+		if (ftpMode) {
+			ftpUp();
+			return;
+		}
 		if (isImageLoaded()) {
 			if (diskImage.isPartitionOpen()) {
 				mainPanel.appendConsole("Unload partition.");
@@ -1593,6 +1768,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	public void renameFile() {
+		if (ftpBlocked()) {
+			return;
+		}
 		if (zipFileLoaded) {
 			mainPanel.appendConsole("Error: renaming files in Zip files not supported.");
 			return;
@@ -1655,6 +1833,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	public void newFile() {
+		if (ftpBlocked()) {
+			return;
+		}
 		if (zipFileLoaded) {
 			mainPanel.appendConsole("Error: add new files to Zip files not supported.");
 			return;
@@ -1671,6 +1852,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	public void mkdir() {
+		if (ftpBlocked()) {
+			return;
+		}
 		if (imageLoaded && !diskImage.supportsDirectories()) {
 			mainPanel.appendConsole("Error: Makedir not supported.");
 			return;
@@ -1728,6 +1912,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	public void deleteFile() {
+		if (ftpBlocked()) {
+			return;
+		}
 		if (zipFileLoaded) {
 			mainPanel.appendConsole("Error: deleting from Zip files not supported.");
 			return;
@@ -1808,6 +1995,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	public void openDiskImage(File file, boolean updateList) {
+		leaveFtp();
 		if (file != null) {
 			if (Setting.isImageFileName(file)) {
 				try {
@@ -2170,6 +2358,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	public void moveFile(final boolean upwards) {
+		if (ftpBlocked()) {
+			return;
+		}
 		moveFile(upwards, false);
 	}
 
@@ -2179,6 +2370,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	 * @param toEnd true to move to the very start (upwards) or end of the disk image
 	 */
 	public void moveFile(final boolean upwards, final boolean toEnd) {
+		if (ftpBlocked()) {
+			return;
+		}
 		if (zipFileLoaded) {
 			mainPanel.appendConsole("Error: files can't be moved in zip file.");
 			return;
@@ -2284,6 +2478,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	public void sortFiles() {
+		if (ftpBlocked()) {
+			return;
+		}
 		if (zipFileLoaded) {
 			mainPanel.appendConsole("Error: files can't be sorted in zip file.");
 			return;
