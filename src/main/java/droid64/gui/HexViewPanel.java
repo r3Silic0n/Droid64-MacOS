@@ -82,7 +82,7 @@ public class HexViewPanel extends JPanel {
 			return renderer;
 		}
 	};
-	private final JToggleButton c64ModeButton = new JToggleButton("C64 mode");
+	private final JToggleButton c64ModeButton = new JToggleButton("PETSCII font");
 	private final JButton okButton = new JButton(Utility.getMessage(Resources.DROID64_HEXVIEW_CLOSE));
 	private final JButton applyButton = new JButton(Utility.getMessage(Resources.DROID64_HEXVIEW_APPLY));
 
@@ -381,6 +381,7 @@ public class HexViewPanel extends JPanel {
 			}
 		});
 		c64ModeButton.setMnemonic('c');
+		c64ModeButton.setToolTipText("Show the text with the Commodore character set (PETSCII), for any Commodore machine");
 		c64ModeButton.addActionListener(ae -> switchFont(c64ModeButton.isSelected()));
 
 		okButton.setMnemonic('o');

@@ -54,7 +54,7 @@ public class TextViewPanel extends JPanel {
 	private final JTextPane textPane = new JTextPane();
 	private final JLabel titleLabel = new JLabel();
 	private final JButton printButton = new JButton("Print");
-	private final JToggleButton c64ModeButton = new JToggleButton("C64 mode");
+	private final JToggleButton c64ModeButton = new JToggleButton("PETSCII font");
 	private final JButton closeButton = new JButton("Close");
 	private JDialog dialog;
 	private String name;
@@ -119,6 +119,7 @@ public class TextViewPanel extends JPanel {
 
 		c64ModeButton.addActionListener(ae -> setTextFont(textPane, c64ModeButton.isSelected()));
 		c64ModeButton.setMnemonic('c');
+		c64ModeButton.setToolTipText("Show the text with the Commodore character set (PETSCII), for any Commodore machine");
 
 		var saveButton = new JButton("Save");
 		saveButton.addActionListener(ae -> save(textPane.getText()));
