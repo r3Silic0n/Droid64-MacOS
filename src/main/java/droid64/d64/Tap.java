@@ -44,6 +44,8 @@ public class Tap extends T64 {
 
 	private byte[] tapData;
 	private transient int turboBlocks;
+	/** estimated size in bytes of the turbo data behind every program (0 = none), same order as the listing */
+	private transient int[] turboEstimate;
 	private transient List<Program> programCache;
 
 	/**
@@ -82,6 +84,7 @@ public class Tap extends T64 {
 	public Tap(DiskImageType imageFormat, byte[] imageData, ConsoleStream consoleStream) {
 		super(imageFormat, build(decode(imageData)), consoleStream);
 		this.tapData = imageData;
+		this.turboEstimate = estimateTurbo(imageData, decode(imageData));
 	}
 
 	@Override
@@ -91,6 +94,13 @@ public class Tap extends T64 {
 		tapData = cbmDisk;
 		var programs = decode(tapData);
 		cbmDisk = build(programs);
+		turboEstimate = estimateTurbo(tapData, programs);
+		for (int k = 0; k < programs.size(); k++) {
+			if (turboEstimate[k] > 0) {
+				feedbackStream.append("TAP: about " + turboEstimate[k] + " bytes of turbo data follow \"" + programs.get(k).name
+						+ "\" (size estimated from the length of the tape).\n");
+			}
+		}
 		int entryCapacity = Utility.getInt16(cbmDisk, 0x22);
 		filesUsedCount = Utility.getInt16(cbmDisk, 0x24);
 		initCbmFile(entryCapacity);
@@ -105,6 +115,69 @@ public class Tap extends T64 {
 				: stubsOnly ? " Turbo tape: only the names are standard; the program data cannot be extracted, start the tape in the emulator.\n"
 				: " Turbo loader data, if any, is not listed.\n");
 		return this;
+	}
+
+	@Override
+	public void readDirectory() {
+		super.readDirectory();
+		// a turbo tape: the standard loader is tiny but the turbo data behind it is the real size of the program
+		for (int k = 0; turboEstimate != null && k < turboEstimate.length && k < getCbmFileSize(); k++) {
+			var cf = getCbmFile(k);
+			if (turboEstimate[k] > 0 && cf != null && cf.getFileType() != FileType.DEL) {
+				cf.setSizeInBlocks((cf.getSizeInBytes() + turboEstimate[k]) / (DiskImage.BLOCK_SIZE - 2));
+			}
+		}
+	}
+
+	/**
+	 * A turbo tape has a standard (KERNAL) loader of a few bytes, followed by the program as turbo data which is not
+	 * decoded. The size of that data is estimated from the number of pulses of the tape after the loader.
+	 * @return for every program the estimated bytes of turbo data after it, or 0
+	 */
+	private static int[] estimateTurbo(byte[] tap, List<Program> programs) {
+		var out = new int[programs.size()];
+		var p = pulses(tap);
+		for (int k = 0; k < programs.size(); k++) {
+			var prog = programs.get(k);
+			int from = prog.pos;
+			int to = k + 1 < programs.size() ? programs.get(k + 1).pos : p.length;
+			if (prog.seq || prog.data.length >= 1000 || from <= 0 || to <= from || to > p.length) {
+				continue;
+			}
+			// what the standard part takes: header block and data block, both twice, the leader of the data and of the next header
+			long explained = 2L * 202 * 20 + 6656 + 2L * (prog.data.length + 10) * 20 + 1000 + (k + 1 < programs.size() ? 27136 : 0);
+			long rest = (to - from) - explained;
+			if (rest < 8000) {
+				continue;
+			}
+			out[k] = (int) (rest / pulsesPerByte(p, (int) (to - rest), to));
+		}
+		return out;
+	}
+
+	/** @return 8 when every data bit is one pulse (short or long), 16 when it is a pair of pulses of constant length */
+	private static int pulsesPerByte(int[] p, int from, int to) {
+		int pairs = 0;
+		int constant = 0;
+		var sums = new ArrayList<Integer>();
+		for (int i = Math.max(0, from); i + 1 < to && sums.size() < 20000; i += 2) {
+			if (p[i] < 2000 && p[i + 1] < 2000) {
+				sums.add(p[i] + p[i + 1]);
+			}
+		}
+		if (sums.size() < 100) {
+			return 8;
+		}
+		var sorted = new ArrayList<>(sums);
+		java.util.Collections.sort(sorted);
+		int median = sorted.get(sorted.size() / 2);
+		for (int v : sums) {
+			pairs++;
+			if (Math.abs(v - median) <= median / 20) {
+				constant++;
+			}
+		}
+		return constant * 10 >= pairs * 9 ? 16 : 8;
 	}
 
 	@Override
