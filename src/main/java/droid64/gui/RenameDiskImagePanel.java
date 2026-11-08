@@ -102,6 +102,27 @@ public class RenameDiskImagePanel extends JPanel {
 		compressedBox.setEnabled(isNewImage);
 		diskTypeBox.setEnabled(isNewImage);
 
+		// the disk name field is active as soon as the window opens (the option pane would focus the OK button)
+		var focusListener = new javax.swing.event.AncestorListener() {
+			@Override
+			public void ancestorAdded(javax.swing.event.AncestorEvent event) {
+				SwingUtilities.invokeLater(() -> {
+					nameTextField.requestFocusInWindow();
+					nameTextField.selectAll();
+				});
+			}
+
+			@Override
+			public void ancestorRemoved(javax.swing.event.AncestorEvent event) {
+				// nothing to do
+			}
+
+			@Override
+			public void ancestorMoved(javax.swing.event.AncestorEvent event) {
+				// nothing to do
+			}
+		};
+		addAncestorListener(focusListener);
 		if (JOptionPane.OK_OPTION == JOptionPane.showConfirmDialog(mainPanel.getParent(), this, title,JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE, null)) {
 			return getResult();
 		}
