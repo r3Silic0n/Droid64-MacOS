@@ -23,7 +23,9 @@ public final class CommodoreGraphics {
 		DOODLE("Doodle (hires, $5C00)"),
 		HIRES("Hires bitmap + screen RAM"),
 		PLUS4_MULTI("Plus/4 multicolor (Multi Botticelli)"),
-		PLUS4_HIRES("Plus/4 hires (Botticelli)");
+		PLUS4_HIRES("Plus/4 hires (Botticelli)"),
+		HIRES_PLAIN("Hires bitmap, no colour data"),
+		MULTI_PLAIN("Multicolor bitmap, no colour data");
 
 		private final String label;
 
@@ -183,7 +185,14 @@ public final class CommodoreGraphics {
 			}
 			return null;
 		case 0x2000:
-			return len >= 9002 && len <= 9100 ? Format.ART_STUDIO : null;
+			if (len >= 9002 && len <= 9100) {
+				return Format.ART_STUDIO;
+			}
+			if (len >= 10003 && len <= 10100) {
+				// Koala layout (bitmap, screen RAM, colour RAM, background) followed by a few extra bytes
+				return Format.KOALA;
+			}
+			return isPlainMulticolor(data) ? Format.MULTI_PLAIN : plainBitmap(data);
 		case 0x5c00:
 			return len >= 9218 && len <= 9300 ? Format.DOODLE : null;
 		case 0x7800:
@@ -197,7 +206,29 @@ public final class CommodoreGraphics {
 		if (len >= 9002 && len <= 9100) {
 			return Format.HIRES;
 		}
-		return null;
+		return plainBitmap(data);
+	}
+
+	/** A bare 8000 byte bitmap with a 2 byte load address, saved by programs that keep the colours elsewhere. */
+	private static Format plainBitmap(byte[] data) {
+		int load = le(data);
+		boolean bitmapAddress = load == 0x2000 || load == 0x4000 || load == 0x6000 || load == 0x8000 || load == 0xa000 || load == 0xe000;
+		return data.length == 8002 && bitmapAddress ? Format.HIRES_PLAIN : null;
+	}
+
+	/** A multicolor bitmap without colour data: mostly the pixel patterns %01010101 and %10101010 and shorter than 8000 bytes. */
+	private static boolean isPlainMulticolor(byte[] data) {
+		if (data.length < 6000 || data.length > 8001) {
+			return false;
+		}
+		int pattern = 0;
+		for (int i = 2; i < data.length; i++) {
+			int v = data[i] & 0xff;
+			if (v == 0x55 || v == 0xaa) {
+				pattern++;
+			}
+		}
+		return pattern * 4 >= data.length;
 	}
 
 	/** ECI files are packed with the escape byte in the first data byte and unpack to 32 KB plus 3 bytes. */
@@ -286,9 +317,38 @@ public final class CommodoreGraphics {
 		case PLUS4_MULTI:
 		case PLUS4_HIRES:
 			return plus4(data, f);
+		case HIRES_PLAIN:
+			return new Result(plainBitmap(data, false), f, "Hires bitmap without colour data, 320 x 200");
+		case MULTI_PLAIN:
+			return new Result(plainBitmap(data, true), f, "Multicolor bitmap without colour data, 320 x 200 (shown in grey)");
 		default:
 			return null;
 		}
+	}
+
+	/** Bitmap only: hires in white on black, multicolor in four grey levels. The bitmap may be shorter than 8000 bytes. */
+	private static BufferedImage plainBitmap(byte[] d, boolean multi) {
+		var img = new BufferedImage(320, 200, BufferedImage.TYPE_INT_RGB);
+		int[] grey = { 0x000000, 0x808080, 0xc0c0c0, 0xffffff };
+		for (int cell = 0; cell < 1000 && 2 + cell * 8 < d.length; cell++) {
+			int ox = (cell % 40) * 8;
+			int oy = (cell / 40) * 8;
+			for (int line = 0; line < 8; line++) {
+				int v = u(d, 2 + cell * 8 + line);
+				if (multi) {
+					for (int p = 0; p < 4; p++) {
+						int rgb = grey[(v >> (6 - 2 * p)) & 3];
+						img.setRGB(ox + p * 2, oy + line, rgb);
+						img.setRGB(ox + p * 2 + 1, oy + line, rgb);
+					}
+				} else {
+					for (int p = 0; p < 8; p++) {
+						img.setRGB(ox + p, oy + line, ((v >> (7 - p)) & 1) == 1 ? 0xffffff : 0x000000);
+					}
+				}
+			}
+		}
+		return img;
 	}
 
 	private static Color c64(int i) {
