@@ -24,6 +24,7 @@ public final class CommodoreGraphics {
 		HIRES("Hires bitmap + screen RAM"),
 		PLUS4_MULTI("Plus/4 multicolor (Multi Botticelli)"),
 		PLUS4_HIRES("Plus/4 hires (Botticelli)"),
+		IFF("Amiga IFF (ILBM / PBM)"),
 		HIRES_PLAIN("Hires bitmap, no colour data"),
 		MULTI_PLAIN("Multicolor bitmap, no colour data");
 
@@ -163,6 +164,9 @@ public final class CommodoreGraphics {
 	 * @return format or null if it is not a known picture
 	 */
 	public static Format detect(byte[] data) {
+		if (IffImage.isIff(data)) {
+			return Format.IFF;
+		}
 		if (data == null || data.length < 1000) {
 			return null;
 		}
@@ -317,6 +321,9 @@ public final class CommodoreGraphics {
 		case PLUS4_MULTI:
 		case PLUS4_HIRES:
 			return plus4(data, f);
+		case IFF:
+			var iff = IffImage.decode(data);
+			return iff == null ? null : new Result(iff.image, f, iff.description);
 		case HIRES_PLAIN:
 			return new Result(plainBitmap(data, false), f, "Hires bitmap without colour data, 320 x 200");
 		case MULTI_PLAIN:
