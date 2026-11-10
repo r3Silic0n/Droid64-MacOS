@@ -1010,10 +1010,10 @@ public abstract class DiskImage implements Serializable {
 	protected void readDirectory(final int dirTrack, final int dirSector, final int maxNumFiles) {
 		int track = dirTrack;
 		int sector = dirSector;
+		int filenumber = 0;
 		try {
 			boolean fileLimitReached = false;
 			int dirPosition = 0;
-			int filenumber = 0;
 			do {
 				verifyTrackSector(track, sector);
 				int dataPosition = getSectorOffset(track, sector);
@@ -1032,13 +1032,15 @@ public abstract class DiskImage implements Serializable {
 				}
 				track = getCbmDiskValue(dataPosition + 0);
 				sector = getCbmDiskValue(dataPosition + 1);
-			} while (track >= 0 && !fileLimitReached && sector != 0xff);
+				// the DOS ends the chain at track 0, whatever the sector byte is (cracked disks often leave $81 there)
+			} while (track > 0 && !fileLimitReached);
 			if (fileLimitReached) {
 				feedbackStream.append("Error: Too many entries in directory (more than ").append(maxNumFiles).append(")!\n");
 			}
 			filesUsedCount = filenumber;
 		} catch (ArrayIndexOutOfBoundsException | CbmException e) { //NOSONAR
 			feedbackStream.append("Error: Sector ").append(track).append('/').append(sector).append(" is outside of image.\n");
+			filesUsedCount = filenumber;	// still show the entries read before the broken link
 		}
 	}
 
