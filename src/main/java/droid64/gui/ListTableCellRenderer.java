@@ -46,6 +46,12 @@ public class ListTableCellRenderer extends DefaultTableCellRenderer {
 		} else {
 			label.setForeground(table.getForeground());
 			label.setBackground(table.getBackground());
+			if (model.isDeleted(row)) {
+				// deleted files are shown dimmed
+				var fg = table.getForeground();
+				var bg = table.getBackground();
+				label.setForeground(new Color((fg.getRed() + bg.getRed() * 2) / 3, (fg.getGreen() + bg.getGreen() * 2) / 3, (fg.getBlue() + bg.getBlue() * 2) / 3));
+			}
 		}
 
 		if (isSelected) {

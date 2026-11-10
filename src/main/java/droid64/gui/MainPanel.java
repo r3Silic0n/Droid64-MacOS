@@ -423,6 +423,26 @@ public class MainPanel implements Serializable {
 	}
 
 	public void setButtonState() {
+		setButtonStateNormal();
+		var panel = getActiveDiskPanel();
+		if (panel != null && panel.isDeletedView()) {
+			// while deleted files are shown only viewing, restoring (Copy File) and leaving are allowed
+			var keep = java.util.EnumSet.of(ActionButton.PLUGIN_8_BUTTON, ActionButton.COPY_FILE_BUTTON, ActionButton.HIDE_CONSOLE_BUTTON,
+					ActionButton.SETTINGS_BUTTON, ActionButton.EXIT_BUTTON, ActionButton.UNLOAD_DISK_BUTTON, ActionButton.LOAD_DISK_BUTTON);
+			buttonMap.forEach((key, comp) -> {
+				if (!keep.contains(key)) {
+					comp.setEnabled(false);
+				}
+			});
+			enableButtons(false, validateDiskButton, renameDiskButton, upButton, downButton, sortButton, moveButton, delPRGButton, renamePRGButton, showBamButton);
+			var inactive = getInactiveDiskPanel();
+			enableButtons(inactive != null && inactive.isWritableImageLoaded() && !inactive.isDeletedView(), copyButton);
+		} else if (buttonMap.get(ActionButton.PLUGIN_8_BUTTON) != null) {
+			buttonMap.get(ActionButton.PLUGIN_8_BUTTON).setEnabled(panel != null && panel.isImageLoaded() && !panel.isTapeLoaded());
+		}
+	}
+
+	private void setButtonStateNormal() {
 		var activePanel = getActiveDiskPanel();
 		var inactivePanel = getInactiveDiskPanel();
 		unloadDiskButton.setText("Unload Disk");
@@ -487,6 +507,17 @@ public class MainPanel implements Serializable {
 			if (ep != null && isOpenCbmProgram(ep)) {
 				// the OpenCBM window has the place of the old "CBM dir" button, which it replaces
 				actionButton = ActionButton.PLUGIN_5_BUTTON;
+			}
+			if (i == 6) {
+				// the former "VICE fs" place: scan the image for deleted files
+				pluginButtons[i] = createButton("Scan Del", ActionButton.PLUGIN_8_BUTTON,
+						"Show the deleted files of the image in this list; Copy File restores them into the other list's image", ev -> {
+							var panel = getActiveDiskPanel();
+							if (panel != null) {
+								panel.toggleDeletedView();
+							}
+						});
+				continue;
 			}
 			pluginButtons[i] = createButton(label != null ? label : "", actionButton, tooltip, pluginButtonListener);
 		}

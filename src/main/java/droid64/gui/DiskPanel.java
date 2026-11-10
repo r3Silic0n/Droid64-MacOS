@@ -61,6 +61,7 @@ import droid64.d64.D81;
 import droid64.d64.D82;
 import droid64.d64.DiskImage;
 import droid64.d64.DiskImageType;
+import droid64.d64.DeletedFile;
 import droid64.d64.FileType;
 import droid64.d64.Utility;
 import droid64.d64.ValidationError;
@@ -182,9 +183,125 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		otherDiskPanel.setTableColors();
 	}
 
+	// ---- Deleted files view ----
+
+	private boolean deletedView = false;
+	private java.util.List<DeletedFile> deletedFiles = new ArrayList<>();
+
+	public boolean isDeletedView() {
+		return deletedView;
+	}
+
+	/** Show the scratched files of the loaded image in place of the normal directory, or go back. Nothing is written to the image. */
+	public void toggleDeletedView() {
+		if (deletedView) {
+			deletedView = false;
+			deletedFiles = new ArrayList<>();
+			tableModel.clear();
+			showDirectory();
+			mainPanel.setButtonState();
+			return;
+		}
+		if (!imageLoaded || zipFileLoaded || ftpMode || diskImage == null || !diskImage.canScanDeleted()) {
+			mainPanel.appendConsole("Scan for deleted files: needs a D64/D71/D81/D80/D82 disk image in this list.");
+			return;
+		}
+		var found = diskImage.scanDeleted();
+		if (found.isEmpty()) {
+			mainPanel.appendConsole("Scan for deleted files: none found.");
+			JOptionPane.showMessageDialog(mainPanel.getParent(), "No deleted files found in this image.", "Scan Del", JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
+		deletedFiles = found;
+		tableModel.clear();
+		for (int i = 0; i < found.size(); i++) {
+			tableModel.updateDirEntry(DirEntry.deleted(found.get(i), i + 1));
+		}
+		deletedView = true;
+		diskLabel.setText(getDiskLabel() + "  [DELETED FILES - OK=complete, PT=partial, BD=lost]");
+		table.revalidate();
+		repaint();
+		mainPanel.appendConsole("Scan for deleted files: " + found.size() + " found. Select and press Copy File / Restore to put them into the other list's image.");
+		mainPanel.setButtonState();
+	}
+
+	/** Restore the selected deleted files into the image loaded in the other list. The source image is never written. */
+	public boolean restoreDeleted() {
+		if (!deletedView) {
+			return false;
+		}
+		var target = otherDiskPanel;
+		if (!target.isWritableImageLoaded() || target.isDeletedView()) {
+			JOptionPane.showMessageDialog(mainPanel.getParent(),
+					"Restore needs a writable disk image open in the OTHER list.\nDeleted files are never written back into the same image.",
+					"Restore", JOptionPane.ERROR_MESSAGE);
+			return false;
+		}
+		try {
+			var a = diskImage.getFile() != null ? diskImage.getFile().getCanonicalFile() : null;
+			var b = target.diskImage.getFile() != null ? target.diskImage.getFile().getCanonicalFile() : null;
+			if (target.diskImage == diskImage || (a != null && a.equals(b))) {
+				JOptionPane.showMessageDialog(mainPanel.getParent(),
+						"The other list shows the same image. Open a different image as the target.",
+						"Restore", JOptionPane.ERROR_MESSAGE);
+				return false;
+			}
+		} catch (java.io.IOException e) {
+			mainPanel.appendConsole("Restore: " + e.getMessage());
+			return false;
+		}
+		int restored = 0;
+		try {
+			for (var row : table.getSelectedRows()) {
+				if (row < 0 || row >= deletedFiles.size()) {
+					continue;
+				}
+				var df = deletedFiles.get(row);
+				var name = df.getEntry().getName();
+				if (df.getStatus() == DeletedFile.BROKEN || df.getData().length == 0) {
+					mainPanel.appendConsole("Restore: '" + name + "' skipped, its first block has been overwritten.");
+					continue;
+				}
+				if (df.getStatus() == DeletedFile.PARTIAL) {
+					int answer = JOptionPane.showConfirmDialog(mainPanel.getParent(),
+							"'" + name + "' is only partly intact (" + df.getBlocks() + " blocks survive).\nRestore the surviving part?",
+							"Restore", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+					if (answer != JOptionPane.YES_OPTION) {
+						continue;
+					}
+				}
+				var copy = new CbmFile(df.getEntry());
+				if (copy.getFileType() == null || copy.getFileType() == FileType.DEL) {
+					copy.setFileType(FileType.PRG);
+				}
+				copy.setFileScratched(false);
+				copy.setFileClosed(true);
+				if (!target.diskImage.saveFile(copy, true, df.getData())) {
+					logFileSaveFailedAbort(name);
+					break;
+				}
+				restored++;
+				mainPanel.appendConsole("Restored '" + name + "' (" + df.getData().length + " bytes) as " + copy.getFileType());
+			}
+			if (restored > 0) {
+				target.diskImage.save();
+			}
+		} catch (Exception | OutOfMemoryError e) { //NOSONAR
+			GuiHelper.showException(mainPanel.getParent(), "Error", e, "Failed to restore file.");
+		}
+		if (restored > 0) {
+			target.reloadDiskImage(true);
+		}
+		return restored > 0;
+	}
+
 	// ---- FTP view ----
 
 	private boolean ftpBlocked() {
+		if (deletedView) {
+			mainPanel.appendConsole("Not available while the deleted files are shown (use Copy File or Restore to restore them into the other list's image; press Scan Del to go back).");
+			return true;
+		}
 		if (ftpMode) {
 			mainPanel.appendConsole("Not available in the FTP view (use Copy File to download, or the FTP window for uploads and changes).");
 		}
@@ -400,7 +517,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		});
 		// hold the left button on a name to rename it in place, on the type to change it
 		new LongPressEditor(table,
-				row -> imageLoaded && !zipFileLoaded && tableModel.getMode() == EntryTableModel.MODE_CBM && diskImage != null
+				row -> imageLoaded && !deletedView && !zipFileLoaded && tableModel.getMode() == EntryTableModel.MODE_CBM && diskImage != null
 						&& row < diskImage.getCbmFileSize() && diskImage.getCbmFile(row).getFileType() != FileType.CBM,
 				row -> diskImage.getCbmFile(row).getFileType().name(),
 				row -> diskImage.getCbmFile(row).getName(),
@@ -470,6 +587,13 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		};
 		fillPlugins.run();
 		popMenu.add(pluginMenu);
+		var restoreItem = new javax.swing.JMenuItem("Restore to other image");
+		restoreItem.addActionListener(event -> {
+			if (restoreDeleted()) {
+				mainPanel.setButtonState();
+			}
+		});
+		popMenu.insert(restoreItem, 0);
 		var mkdirItem = new javax.swing.JMenuItem("Make directory...");
 		mkdirItem.addActionListener(event -> mkdir());
 		popMenu.add(mkdirItem);
@@ -478,6 +602,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
 				// only on the file system, not inside a disk image or zip file
 				mkdirItem.setVisible(!imageLoaded && !zipFileLoaded);
+				restoreItem.setVisible(deletedView);
 				fillPlugins.run();
 			}
 
@@ -648,6 +773,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		if (row < 0) {
 			return;
 		}
+		if (deletedView) {
+			return;
+		}
 		try {
 			openedRow = null;
 			if (ftpMode) {
@@ -750,6 +878,10 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	 * @param prg external program to be executed.
 	 */
 	public void doExternalProgram(ExternalProgram prg) {
+		if (deletedView) {
+			mainPanel.appendConsole("Not available while the deleted files are shown.");
+			return;
+		}
 		var selectedFiles = getSelectedFiles();
 		File imgFile = null;
 		if (imageLoaded) {
@@ -895,6 +1027,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	private void showDirectory() {
+		deletedView = false;
 		if (imageLoaded) {
 			diskMachine = diskImage.isCpmImage() ? null : MachineDetector.detect(diskImage);
 			mainPanel.appendConsole("Detected computer: " + (diskMachine != null ? diskMachine : "unknown"));
@@ -1075,6 +1208,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 	/** @return true if at least one file was selected and all selected files were copied */
 	private boolean copyFiles() {
+		if (deletedView) {
+			return restoreDeleted();
+		}
 		if (otherDiskPanel.zipFileLoaded) {
 			mainPanel.appendConsole("Error: copying to Zip files not supported.");
 			return false;
@@ -1247,6 +1383,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	 */
 	private byte[] getFileData(int fileNum, boolean quiet) {
 		try {
+			if (deletedView) {
+				return fileNum >= 0 && fileNum < deletedFiles.size() ? deletedFiles.get(fileNum).getData() : new byte[0];
+			}
 			if (imageLoaded) {
 				return diskImage.getFileData(fileNum);
 			} else if (ftpMode) {
@@ -1274,6 +1413,10 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 	/** Edit the selected file in the hex editor. Changes are written back into the image or the local file. */
 	public void hexEditFile() {
+		if (deletedView) {
+			mainPanel.appendConsole("Not available while the deleted files are shown.");
+			return;
+		}
 		var rows = table.getSelectedRows();
 		if (rows.length == 0) {
 			mainPanel.appendConsole("Hex edit: select a file first.");
@@ -1471,6 +1614,10 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 	/** Open the SID music player for the files of this disk. */
 	public void playMusic() {
+		if (deletedView) {
+			mainPanel.appendConsole("Not available while the deleted files are shown.");
+			return;
+		}
 		var open = MusicPlayerDialog.getOpenInstance();
 		if (open != null) {
 			open.bringToFront();
@@ -1527,6 +1674,10 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	 * Plain PC text files (txt, asc, nfo...) are shown as text instead.
 	 */
 	public void showFile() {
+		if (deletedView) {
+			mainPanel.appendConsole("Not available while the deleted files are shown.");
+			return;
+		}
 		for (var i : table.getSelectedRows()) {
 			var name = getName(i);
 			mainPanel.appendConsole("View '" + name + "'");
@@ -1733,6 +1884,10 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	private void setTypeOfFiles(int[] rows, FileType newType) {
+		if (deletedView) {
+			mainPanel.appendConsole("Not available while the deleted files are shown.");
+			return;
+		}
 		boolean changed = false;
 		for (var i : rows) {
 			try {
@@ -1755,6 +1910,10 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 	/** Rename one file after it was edited in the list. The type is kept. */
 	private void renameInPlace(int row, String newName) {
+		if (deletedView) {
+			mainPanel.appendConsole("Not available while the deleted files are shown.");
+			return;
+		}
 		try {
 			var cbmFile = diskImage.getCbmFile(row);
 			mainPanel.formatConsole("New filename is: \"%s\" %s.\n[%d] \"%s\"", newName, cbmFile.getFileType(), cbmFile.getDirPosition(), cbmFile.getName());
@@ -1908,6 +2067,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	private String getName(int i) {
+		if (deletedView) {
+			return i >= 0 && i < deletedFiles.size() ? deletedFiles.get(i).getEntry().getName() : "";
+		}
 		return imageLoaded ? diskImage.getCbmFile(i).getName() : getLocalFilename(i);
 	}
 
@@ -1945,6 +2107,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	private void clearDirTable(){
+		deletedView = false;
 		tableModel.clear();
 		zipFileLoaded = false;
 	}
@@ -2218,6 +2381,10 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	private void printDir() {
+		if (deletedView) {
+			mainPanel.appendConsole("Not available while the deleted files are shown.");
+			return;
+		}
 		String title;
 		var lines = new ArrayList<String>();
 		if (imageLoaded) {
@@ -2309,7 +2476,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	/** @return indexes (in the directory) of the selected DEL entries of the loaded disk image */
 	public java.util.List<Integer> getSelectedDelEntries() {
 		var list = new java.util.ArrayList<Integer>();
-		if (imageLoaded && !zipFileLoaded && diskImage != null) {
+		if (imageLoaded && !deletedView && !zipFileLoaded && diskImage != null) {
 			for (var row : table.getSelectedRows()) {
 				try {
 					var f = diskImage.getCbmFile(row);
@@ -2639,13 +2806,13 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 		private String getSelectedAsString(JTable table) {
 			var b = new StringBuilder();
-			if (imageLoaded) {
+			if (imageLoaded && !deletedView) {
 				b.append(String.format("%s \"%-16s\" %s%n",
 						diskImage.getBam().getDiskDosType(), diskImage.getBam().getDiskName(), diskImage.getBam().getDiskId()));
 			}
 			for (int row = 0; row < table.getRowCount(); row++) {
 				if (table.isRowSelected(row)) {
-					if (imageLoaded) {
+					if (imageLoaded && !deletedView) {
 						b.append(diskImage.getCbmFile(row).asDirString()).append('\n');
 					} else {
 						for (int c=0; c<table.getColumnCount(); c++) {

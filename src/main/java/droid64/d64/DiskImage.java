@@ -1044,6 +1044,103 @@ public abstract class DiskImage implements Serializable {
 		}
 	}
 
+	/** @return first directory block, or null when the image type does not support scanning for deleted files */
+	protected TrackSector getDirectoryStart() {
+		return null;
+	}
+
+	/** @return true if this image can be scanned for deleted files */
+	public boolean canScanDeleted() {
+		return !isCpmImage() && getDirectoryStart() != null;
+	}
+
+	private boolean validBlock(int track, int sector) {
+		return track >= 1 && track <= getTrackCount() && sector >= 0 && sector < getMaxSectors(track);
+	}
+
+	/**
+	 * Look for scratched files in the directory. Nothing is changed in the image.
+	 * @return the deleted files that still have a recognizable start block
+	 */
+	public java.util.List<DeletedFile> scanDeleted() {
+		var result = new java.util.ArrayList<DeletedFile>();
+		var start = getDirectoryStart();
+		if (start == null || isCpmImage()) {
+			return result;
+		}
+		var owned = new java.util.HashSet<Integer>();
+		var raw = new java.util.ArrayList<CbmFile>();
+		int track = start.track;
+		int sector = start.sector;
+		int guard = 0;
+		while (track > 0 && validBlock(track, sector) && guard++ < 2000) {
+			int pos = getSectorOffset(track, sector);
+			if (!owned.add(track * 256 + sector)) {
+				break;
+			}
+			for (int i = 0; i < DIR_ENTRIES_PER_SECTOR; i++) {
+				raw.add(new CbmFile(cbmDisk, pos + i * DIR_ENTRY_SIZE));
+			}
+			track = getCbmDiskValue(pos);
+			sector = getCbmDiskValue(pos + 1);
+		}
+		for (var cf : raw) {
+			if (!cf.isFileScratched()) {
+				walkChain(cf.getTrack(), cf.getSector(), owned, null, new java.util.HashSet<>());
+			}
+		}
+		for (var cf : raw) {
+			if (cf.isFileScratched() && !Utility.isEmpty(cf.getName()) && validBlock(cf.getTrack(), cf.getSector())) {
+				var data = new java.io.ByteArrayOutputStream();
+				var chain = new java.util.HashSet<Integer>();
+				int status = walkChain(cf.getTrack(), cf.getSector(), owned, data, chain);
+				result.add(new DeletedFile(cf, chain.size(), status, data.toByteArray()));
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Follow a file chain. When data is null the sectors are marked as owned, otherwise sectors that are owned or in use are not followed.
+	 * @return DeletedFile.COMPLETE, PARTIAL or BROKEN
+	 */
+	private int walkChain(int track, int sector, java.util.Set<Integer> owned, java.io.ByteArrayOutputStream data, java.util.Set<Integer> chain) {
+		int count = 0;
+		while (true) {
+			if (!validBlock(track, sector)) {
+				return count == 0 ? DeletedFile.BROKEN : DeletedFile.PARTIAL;
+			}
+			int key = track * 256 + sector;
+			if (data == null) {
+				if (!owned.add(key)) {
+					return DeletedFile.COMPLETE;
+				}
+			} else if (owned.contains(key) || chain.contains(key) || !isSectorFree(track, sector)) {
+				return count == 0 ? DeletedFile.BROKEN : DeletedFile.PARTIAL;
+			}
+			chain.add(key);
+			count++;
+			int pos = getSectorOffset(track, sector);
+			int nt = getCbmDiskValue(pos);
+			int ns = getCbmDiskValue(pos + 1);
+			if (nt == 0) {
+				if (data != null) {
+					int last = Math.max(2, Math.min(255, ns));
+					data.write(cbmDisk, pos + 2, last - 2 + 1);
+				}
+				return DeletedFile.COMPLETE;
+			}
+			if (data != null) {
+				data.write(cbmDisk, pos + 2, BLOCK_SIZE - 2);
+			}
+			if (count > 3200) {
+				return DeletedFile.PARTIAL;
+			}
+			track = nt;
+			sector = ns;
+		}
+	}
+
 	public abstract int getNextSector(int track, int sector);
 
 	public abstract TrackSector getSector(int offset);

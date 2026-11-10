@@ -196,6 +196,11 @@ public class D81 extends DiskImage {
 	}
 
 	@Override
+	protected TrackSector getDirectoryStart() {
+		return currentPartitionTrack == null ? new TrackSector(DIR_TRACK, DIR_SECT) : null;
+	}
+
+	@Override
 	public void readDirectory() {
 		if (isCpmImage()) {
 			readCpmDirectory(D81Constants.C1581_DIR_TRACK, D81Constants.C1581_DIR_SECTORS, true);

@@ -85,6 +85,10 @@ class EntryTableModel extends AbstractTableModel {
 		return data.size();
 	}
 
+	public synchronized boolean isDeleted(int row) {
+		return row >= 0 && row < data.size() && data.get(row) != null && data.get(row).isDeleted();
+	}
+
 	public synchronized boolean isFile(int row) {
 		return data.get(row).isFile();
 	}

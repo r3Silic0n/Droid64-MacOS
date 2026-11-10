@@ -135,6 +135,11 @@ public class D82 extends DiskImage {
 	}
 
 	@Override
+	protected TrackSector getDirectoryStart() {
+		return new TrackSector(DIR_TRACK, DIR_SECT);
+	}
+
+	@Override
 	public void readDirectory() {
 		if (isCpmImage()) {
 			// Read CP/M directory here

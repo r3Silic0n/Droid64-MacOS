@@ -141,6 +141,11 @@ public class D71 extends DiskImage {
 	}
 
 	@Override
+	protected TrackSector getDirectoryStart() {
+		return new TrackSector(DIR_TRACK, DIR_SECT);
+	}
+
+	@Override
 	public void readDirectory() {
 		if (isCpmImage()) {
 			readCpmDirectory(D71Constants.C128_DS_DIR_TRACK, D71Constants.C128_DS_DIR_SECTORS, false);

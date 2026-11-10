@@ -190,6 +190,11 @@ public class D64 extends DiskImage {
 	}
 
 	@Override
+	protected TrackSector getDirectoryStart() {
+		return new TrackSector(DIR_TRACK, 1);
+	}
+
+	@Override
 	public void readDirectory() {
 		if (isCpmImage()) {
 			readCpmDirectory();

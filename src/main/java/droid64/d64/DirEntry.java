@@ -43,6 +43,7 @@ public class DirEntry implements Serializable {
 	private int track;
 	private int sector;
 
+	private boolean deleted = false;
 	private boolean isFile = true;
 	private boolean isImageFile = false;
 	private File zipFile;
@@ -66,6 +67,20 @@ public class DirEntry implements Serializable {
 			track = cbm.getTrack();
 			sector = cbm.getSector();
 		}
+	}
+
+	/** Row for a scratched file found by the deleted-file scan. */
+	public static DirEntry deleted(DeletedFile df, int fileNum) {
+		var e = new DirEntry(df.getEntry(), fileNum);
+		e.deleted = true;
+		e.blocks = df.getBlocks();
+		e.type = "SCR";
+		e.flags = df.getStatusText();
+		return e;
+	}
+
+	public boolean isDeleted() {
+		return deleted;
 	}
 
 	public DirEntry(File file, int fileNum) {
