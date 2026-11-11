@@ -1067,6 +1067,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			table.setColumnModel(tableModel.getTableColumnModel());
 			table.revalidate();
 			repaint();
+			notifyMusicPlayer();
 		} else {
 			mainPanel.appendConsole("no image loaded");
 		}
@@ -1127,6 +1128,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		table.setColumnModel(tableModel.getTableColumnModel());
 		table.revalidate();
 		repaint();
+		notifyMusicPlayer();
 	}
 
 	/**
@@ -1642,14 +1644,30 @@ public class DiskPanel extends JPanel implements TableModelListener {
 			return;
 		}
 		int rows = table.getRowCount();
-		var names = new ArrayList<String>();
-		for (var i = 0; i < rows; i++) {
-			names.add(getName(i));
-		}
+		var names = musicNames();
 		int start = Math.max(0, table.getSelectedRow());
 		mainPanel.appendConsole("Music player");
-		// quiet loader: folders, huge or unreadable files are simply not music
-		IntFunction<byte[]> quiet = i -> {
+		var quiet = musicLoader();
+		var dlg = new MusicPlayerDialog(mainPanel.getParent(), DroiD64.PROGNAME + " - Music player", names, quiet, start);
+		dlg.setSourceKey(musicSourceKey());
+		dlg.setVisible(true);
+		if (rows == 0) {
+			dlg.startInHvsc();
+		}
+	}
+
+	/** @return the names of the rows of this list, for the music player */
+	private java.util.List<String> musicNames() {
+		var names = new ArrayList<String>();
+		for (var i = 0; i < table.getRowCount(); i++) {
+			names.add(getName(i));
+		}
+		return names;
+	}
+
+	/** @return a quiet loader for the music player: folders, huge or unreadable files are simply not music */
+	private IntFunction<byte[]> musicLoader() {
+		return i -> {
 			try {
 				if (imageLoaded) {
 					return diskImage.getFileData(i);
@@ -1662,11 +1680,27 @@ public class DiskPanel extends JPanel implements TableModelListener {
 				return null;
 			}
 		};
-		var dlg = new MusicPlayerDialog(mainPanel.getParent(), DroiD64.PROGNAME + " - Music player", names, quiet, start);
-		dlg.setVisible(true);
-		if (rows == 0) {
-			dlg.startInHvsc();
+	}
+
+	/** @return the key the music player uses to know which list it was opened from */
+	private String musicSourceKey() {
+		return "lister:" + System.identityHashCode(this);
+	}
+
+	/**
+	 * The list was read again (files deleted, renamed, copied, another disk or folder opened ...): an open
+	 * music player that was opened from this list shows the new files (it reads them through this list).
+	 */
+	private void notifyMusicPlayer() {
+		var open = MusicPlayerDialog.getOpenInstance();
+		if (open == null || ftpMode || deletedView || !musicSourceKey().equals(open.getSourceKey())) {
+			return;
 		}
+		SwingUtilities.invokeLater(() -> {
+			if (!ftpMode && !deletedView && MusicPlayerDialog.getOpenInstance() == open) {
+				open.updateDiskList(musicNames(), musicLoader());
+			}
+		});
 	}
 
 	public void imageViewFile() {

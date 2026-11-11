@@ -69,6 +69,8 @@ public class MusicPlayerDialog extends JDialog {
 		boolean dir;
 		boolean up;
 		String found = "";	// result of "Find in HVSC"
+		int dataHash;		// of the file data when it was scanned
+		Item prev;			// the same file before the disk was read again: its results are kept if the data is unchanged
 
 		Item(int index, String name) {
 			this.index = index;
@@ -80,7 +82,11 @@ public class MusicPlayerDialog extends JDialog {
 	private final JList<Item> list = new JList<>(model);
 	private final JCheckBox musicOnly = new JCheckBox("Music only", true);
 	private final List<Item> all = new ArrayList<>();
-	private final IntFunction<byte[]> loader;
+	private IntFunction<byte[]> loader;
+	private Object sourceKey;
+	private volatile int generation;
+	private int scanGeneration;
+	private boolean rebuilding;
 	private final JLabel status = new JLabel(" ");
 	private final JLabel infoTitle = new JLabel("-");
 	private final JLabel infoAuthor = new JLabel("-");
@@ -122,6 +128,84 @@ public class MusicPlayerDialog extends JDialog {
 	/** @return the open player window, or null */
 	public static MusicPlayerDialog getOpenInstance() {
 		return instance != null && instance.isDisplayable() ? instance : null;
+	}
+
+	/** @param key what the disk list shows (the lister and its image or folder) */
+	public void setSourceKey(Object key) {
+		sourceKey = key;
+	}
+
+	/** @return what the disk list shows, see {@link #setSourceKey(Object)} */
+	public Object getSourceKey() {
+		return sourceKey;
+	}
+
+	/**
+	 * The files of the disk were read again (a file was deleted, renamed, copied in ...): show the new list.
+	 * Scan results are kept for files whose data did not change; the playing tune keeps playing if its
+	 * file is still there, otherwise it is stopped.
+	 * @param names the file names, in list order
+	 * @param newLoader reads the file data by list position
+	 */
+	public void updateDiskList(List<String> names, IntFunction<byte[]> newLoader) {
+		generation++;
+		var old = new java.util.HashMap<String, java.util.ArrayDeque<Item>>();
+		for (var it : all) {
+			old.computeIfAbsent(it.name, k -> new java.util.ArrayDeque<>()).add(it);
+		}
+		var fresh = new ArrayList<Item>();
+		Item mapped = null;
+		var cur = current;
+		for (int i = 0; i < names.size(); i++) {
+			var it = new Item(i, names.get(i));
+			var q = old.get(it.name);
+			var p = q != null ? q.poll() : null;
+			if (p != null) {
+				// show the earlier result at once; the scan checks that the data is still the same
+				var base = p.prev != null && !p.checked ? p.prev : p;
+				if (base.checked) {
+					it.prev = base;
+					it.tune = base.tune;
+					it.texts = base.texts;
+					it.hvsc = base.hvsc;
+					it.found = base.found;
+				}
+				if (p == cur) {
+					mapped = it;
+				}
+			}
+			fresh.add(it);
+		}
+		loader = newLoader;
+		all.clear();
+		all.addAll(fresh);
+		boolean diskItemShown = cur != null && cur.file == null;
+		if (hvscMode()) {
+			if (diskItemShown) {
+				current = mapped;
+			}
+		} else {
+			rebuilding = true;
+			try {
+				model.clear();
+				for (var it : all) {
+					if (!musicOnly.isSelected() || it.tune != null) {
+						model.addElement(it);
+					}
+				}
+				if (mapped != null) {
+					current = mapped;
+					list.setSelectedValue(mapped, true);
+				}
+			} finally {
+				rebuilding = false;
+			}
+			if (diskItemShown && mapped == null) {
+				select(null);	// its file is gone: stop
+				status.setText("'" + cur.name + "' is no longer on the disk.");
+			}
+		}
+		startScan(-1);
 	}
 
 	/** Bring the window to the front. */
@@ -333,7 +417,7 @@ public class MusicPlayerDialog extends JDialog {
 			}
 		});
 		list.addListSelectionListener(e -> {
-			if (!e.getValueIsAdjusting()) {
+			if (!e.getValueIsAdjusting() && !rebuilding) {
 				select(list.getSelectedValue());
 			}
 		});
@@ -531,31 +615,55 @@ public class MusicPlayerDialog extends JDialog {
 	// ---- scanning ----
 
 	private void startScan(int selectIndex) {
-		if (scanner != null && scanner.isAlive()) {
+		if (scanner != null && scanner.isAlive() && scanGeneration == generation) {
 			return;
 		}
 		scanButton.setEnabled(false);
+		final int gen = generation;
+		scanGeneration = gen;
+		final var items = new ArrayList<>(all);
+		final var load = loader;
 		scanner = new Thread(() -> {
 			int found = 0;
-			int n = all.size();
-			for (int i = 0; i < n && !closed; i++) {
-				var it = all.get(i);
+			int n = items.size();
+			for (int i = 0; i < n && !closed && gen == generation; i++) {
+				var it = items.get(i);
 				if (it.checked) {
+					if (it.tune != null) {
+						found++;
+					}
 					continue;
 				}
 				final int k = i;
 				SwingUtilities.invokeLater(() -> status.setText("Scanning " + (k + 1) + "/" + n + " : " + it.name));
+				boolean hadTune = it.tune != null;
 				try {
-					byte[] d = loader.apply(it.index);
-					it.tune = detect(it, d);
+					byte[] d = load.apply(it.index);
+					int h = d == null ? 0 : java.util.Arrays.hashCode(d) * 31 + d.length;
+					if (it.prev != null && it.prev.dataHash == h) {
+						// unchanged file: keep the earlier result
+						it.tune = it.prev.tune;
+					} else {
+						it.texts = new ArrayList<>();
+						it.hvsc = null;
+						it.found = "";
+						it.tune = detect(it, d);
+					}
+					it.dataHash = h;
 				} catch (RuntimeException e) {	//NOSONAR
 					it.tune = null;
 				}
+				it.prev = null;
 				it.checked = true;
 				if (it.tune != null) {
 					found++;
+				}
+				if (it.tune != null || hadTune) {
 					SwingUtilities.invokeLater(this::refreshList);
 				}
+			}
+			if (gen != generation) {
+				return;
 			}
 			final int f = found;
 			SwingUtilities.invokeLater(() -> {
@@ -617,14 +725,23 @@ public class MusicPlayerDialog extends JDialog {
 
 	private void refreshList() {
 		var sel = list.getSelectedValue();
-		model.clear();
-		for (var it : hvscMode() ? hvscItems : all) {
-			if (hvscMode() || !musicOnly.isSelected() || it.tune != null) {
-				model.addElement(it);
+		rebuilding = true;
+		try {
+			model.clear();
+			for (var it : hvscMode() ? hvscItems : all) {
+				if (hvscMode() || !musicOnly.isSelected() || it.tune != null) {
+					model.addElement(it);
+				}
 			}
+			if (sel != null) {
+				list.setSelectedValue(sel, true);
+			}
+		} finally {
+			rebuilding = false;
 		}
-		if (sel != null) {
-			list.setSelectedValue(sel, true);
+		if (sel != null && list.getSelectedValue() != sel) {
+			// the selected entry is no longer in the list
+			select(list.getSelectedValue());
 		}
 	}
 
