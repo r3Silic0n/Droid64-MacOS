@@ -437,7 +437,8 @@ public class MainPanel implements Serializable {
 		setButtonStateNormal();
 		var panel = getActiveDiskPanel();
 		var scanDel = buttonMap.get(ActionButton.PLUGIN_8_BUTTON);
-		if (scanDel instanceof javax.swing.AbstractButton b) {
+		if (scanDel instanceof javax.swing.AbstractButton) {
+			var b = (javax.swing.AbstractButton) scanDel;
 			boolean back = panel != null && panel.isDeletedView();
 			b.setText(back ? "Back" : "Scan Del");
 			b.setToolTipText(back ? "Leave the deleted files and show the image's directory again (also: left arrow, Esc, Unload Disk)"
