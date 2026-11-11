@@ -195,11 +195,7 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	/** Show the scratched files of the loaded image in place of the normal directory, or go back. Nothing is written to the image. */
 	public void toggleDeletedView() {
 		if (deletedView) {
-			deletedView = false;
-			deletedFiles = new ArrayList<>();
-			tableModel.clear();
-			showDirectory();
-			mainPanel.setButtonState();
+			leaveDeletedView();
 			return;
 		}
 		if (!imageLoaded || zipFileLoaded || ftpMode || diskImage == null || !diskImage.canScanDeleted()) {
@@ -222,6 +218,21 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		table.revalidate();
 		repaint();
 		mainPanel.appendConsole("Scan for deleted files: " + found.size() + " found. Select and press Copy File / Restore to put them into the other list's image.");
+		mainPanel.setButtonState();
+	}
+
+	/** Go back from the deleted files to the normal directory of the same image (it is read again from the file). */
+	public void leaveDeletedView() {
+		if (!deletedView) {
+			return;
+		}
+		deletedView = false;
+		deletedFiles = new ArrayList<>();
+		reloadDiskImage(true);
+		setTableColors();
+		table.revalidate();
+		repaint();
+		mainPanel.appendConsole("Back to the directory of the image.");
 		mainPanel.setButtonState();
 	}
 
@@ -648,6 +659,11 @@ public class DiskPanel extends JPanel implements TableModelListener {
 		});
 		final var backButton = new JButton(MetalIconFactory.getFileChooserUpFolderIcon());
 		backButton.addActionListener(ae -> {
+			if (deletedView) {
+				leaveDeletedView();
+				setActive(true);
+				return;
+			}
 			unloadDisk();
 			setActive(true);
 		});
@@ -675,7 +691,9 @@ public class DiskPanel extends JPanel implements TableModelListener {
 
 	private void processFileTableKeyEvent(int keyCode) {
 		int row = table.getSelectedRow();
-		if (keyCode == KeyEvent.VK_TAB) {
+		if (deletedView && (keyCode == KeyEvent.VK_LEFT || keyCode == KeyEvent.VK_ESCAPE || keyCode == KeyEvent.VK_BACK_SPACE)) {
+			leaveDeletedView();
+		} else if (keyCode == KeyEvent.VK_TAB) {
 			setActive(!isActive());
 		} else if (keyCode == KeyEvent.VK_LEFT) {
 			if (imageLoaded) {
@@ -1830,6 +1848,10 @@ public class DiskPanel extends JPanel implements TableModelListener {
 	}
 
 	public void unloadDisk() {
+		if (deletedView) {
+			leaveDeletedView();
+			return;
+		}
 		if (ftpMode) {
 			ftpUp();
 			return;

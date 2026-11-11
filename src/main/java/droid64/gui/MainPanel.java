@@ -422,18 +422,41 @@ public class MainPanel implements Serializable {
 		}
 	}
 
+	/** buttons switched off only because of the deleted files view; they are switched back on when the view is left */
+	private final java.util.Set<ActionButton> disabledForDeletedView = java.util.EnumSet.noneOf(ActionButton.class);
+
 	public void setButtonState() {
+		// first give back what the deleted files view took away, then work out the normal state
+		disabledForDeletedView.forEach(key -> {
+			var comp = buttonMap.get(key);
+			if (comp != null) {
+				comp.setEnabled(true);
+			}
+		});
+		disabledForDeletedView.clear();
 		setButtonStateNormal();
 		var panel = getActiveDiskPanel();
+		var scanDel = buttonMap.get(ActionButton.PLUGIN_8_BUTTON);
+		if (scanDel instanceof javax.swing.AbstractButton b) {
+			boolean back = panel != null && panel.isDeletedView();
+			b.setText(back ? "Back" : "Scan Del");
+			b.setToolTipText(back ? "Leave the deleted files and show the image's directory again (also: left arrow, Esc, Unload Disk)"
+					: "Show the deleted files of the image in this list; Copy File restores them into the other list's image");
+		}
 		if (panel != null && panel.isDeletedView()) {
 			// while deleted files are shown only viewing, restoring (Copy File) and leaving are allowed
 			var keep = java.util.EnumSet.of(ActionButton.PLUGIN_8_BUTTON, ActionButton.COPY_FILE_BUTTON, ActionButton.HIDE_CONSOLE_BUTTON,
 					ActionButton.SETTINGS_BUTTON, ActionButton.EXIT_BUTTON, ActionButton.UNLOAD_DISK_BUTTON, ActionButton.LOAD_DISK_BUTTON);
 			buttonMap.forEach((key, comp) -> {
-				if (!keep.contains(key)) {
+				if (!keep.contains(key) && comp.isEnabled()) {
 					comp.setEnabled(false);
+					disabledForDeletedView.add(key);
 				}
 			});
+			if (scanDel != null) {
+				scanDel.setEnabled(true);
+			}
+			unloadDiskButton.setText("Back");
 			enableButtons(false, validateDiskButton, renameDiskButton, upButton, downButton, sortButton, moveButton, delPRGButton, renamePRGButton, showBamButton);
 			var inactive = getInactiveDiskPanel();
 			enableButtons(inactive != null && inactive.isWritableImageLoaded() && !inactive.isDeletedView(), copyButton);
