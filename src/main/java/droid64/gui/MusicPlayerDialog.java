@@ -106,6 +106,7 @@ public class MusicPlayerDialog extends JDialog {
 	private final JCheckBox[] voiceBoxes = { new JCheckBox("V1", true), new JCheckBox("V2", true), new JCheckBox("V3", true) };
 	private final JCheckBox filterBox = new JCheckBox("Filter", true);
 	private final JButton saveButton = new JButton("Save as SID...");
+	private final JButton savePrgButton = new JButton("Save PRG...");
 	private final JComboBox<String> sourceBox = new JComboBox<>(new String[] { "Disk", "HVSC" });
 	private final JButton findButton = new JButton("Find in HVSC");
 	private final List<Item> hvscItems = new ArrayList<>();
@@ -485,6 +486,9 @@ public class MusicPlayerDialog extends JDialog {
 		var bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
 		saveButton.addActionListener(e -> saveAsSid());
 		bottom.add(saveButton);
+		savePrgButton.setToolTipText("Save the selected tune as a C64 program that plays it on its own (LOAD, RUN), with the usual raster player loop");
+		savePrgButton.addActionListener(e -> saveAsPrg());
+		bottom.add(savePrgButton);
 		var miniButton = new JButton("Mini player");
 		miniButton.setToolTipText("Small always-on-top player window, so music can play while you work in DroiD64");
 		miniButton.addActionListener(e -> showMini());
@@ -519,7 +523,7 @@ public class MusicPlayerDialog extends JDialog {
 	}
 
 	private void enableControls(boolean on) {
-		for (Component c : new Component[] { playButton, stopButton, prevSong, nextSong, saveButton }) {
+		for (Component c : new Component[] { playButton, stopButton, prevSong, nextSong, saveButton, savePrgButton }) {
 			c.setEnabled(on);
 		}
 	}
@@ -1218,6 +1222,37 @@ public class MusicPlayerDialog extends JDialog {
 		try {
 			Files.write(fc.getSelectedFile().toPath(), copy.toPsid());
 			status.setText("Saved " + fc.getSelectedFile().getName());
+		} catch (IOException e) {
+			JOptionPane.showMessageDialog(this, "Failed to save: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+
+	/** Save the selected tune (the tune number now shown) as a program that plays it on a C64. */
+	private void saveAsPrg() {
+		if (current == null || current.tune == null) {
+			return;
+		}
+		byte[] prg;
+		try {
+			prg = droid64.sid.MusicPrgExporter.build(current.tune, song);
+		} catch (IllegalArgumentException e) {
+			JOptionPane.showMessageDialog(this, e.getMessage(), "Save PRG", JOptionPane.WARNING_MESSAGE);
+			return;
+		}
+		String base = current.name.replaceAll("(?i)\\.(sid|prg)$", "").replaceAll("[^A-Za-z0-9 _.()-]", "_").trim();
+		if (base.isEmpty()) {
+			base = "music";
+		}
+		try {
+			var filename = FileDialogHelper.openTextFileDialog("Save C64 program", null, base + " (run).prg", true, new String[] { ".prg" });
+			if (filename == null) {
+				return;
+			}
+			if (!filename.toLowerCase().endsWith(".prg")) {
+				filename += ".prg";
+			}
+			Files.write(new File(filename).toPath(), prg);
+			status.setText("Saved " + new File(filename).getName() + " (" + prg.length + " bytes, tune " + song + "): LOAD and RUN it on a C64.");
 		} catch (IOException e) {
 			JOptionPane.showMessageDialog(this, "Failed to save: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
 		}
