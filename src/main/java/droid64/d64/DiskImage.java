@@ -1187,13 +1187,77 @@ public abstract class DiskImage implements Serializable {
 		return out.toByteArray();
 	}
 
+	/**
+	 * Free the sectors of a deleted file's chain. A broken chain is handled safely: the walk stops when the
+	 * chain leaves the disk or comes back to a sector it has already passed (it used to loop for ever), and
+	 * sectors that are also used by a file that stays or by the directory are not freed (cross-linked
+	 * files would otherwise be overwritten by the next save).
+	 */
 	protected void freeBlocks(int track, int sector) {
+		var keep = sectorsInUseByOthers();
+		var seen = new java.util.HashSet<Integer>();
+		int freed = 0;
+		int kept = 0;
 		while (track != 0) {
+			if (!validBlock(track, sector)) {
+				feedbackStream.append("\nThe file's sector chain points outside the disk (").append(track).append('/').append(sector).append("); stopped there.\n");
+				break;
+			}
+			int key = track << 8 | sector;
+			if (!seen.add(key)) {
+				feedbackStream.append("\nThe file's sector chain loops back to sector ").append(track).append('/').append(sector).append("; stopped there.\n");
+				break;
+			}
 			int tmpTrack = getCbmDiskValue(track, sector, 0);
 			int tmpSector = getCbmDiskValue(track, sector, 1);
-			markSectorFree(track, sector);
+			if (keep.contains(key)) {
+				kept++;
+			} else {
+				markSectorFree(track, sector);
+				freed++;
+			}
 			track = tmpTrack;
 			sector = tmpSector;
+		}
+		if (kept > 0) {
+			feedbackStream.append("\n").append(kept).append(" block(s) of the chain are also used by other files or the directory and were kept in use; ")
+				.append(freed).append(" block(s) freed.\n");
+		}
+	}
+
+	/** @return the sectors (track << 8 | sector) used by the files that are not scratched and by the directory */
+	private java.util.Set<Integer> sectorsInUseByOthers() {
+		var keep = new java.util.HashSet<Integer>();
+		var start = getDirectoryStart();
+		if (start != null) {
+			for (int s = 0; s <= start.sector; s++) {
+				keep.add(start.track << 8 | s);	// header / BAM sectors in front of the directory
+			}
+			collectChain(start.track, start.sector, keep);
+		}
+		for (var cf : cbmFile) {
+			if (cf == null || cf.isFileScratched() || cf.getFileType() == FileType.CBM || cf.getFileType() == FileType.DEL && cf.getTrack() == 0) {
+				continue;
+			}
+			collectChain(cf.getTrack(), cf.getSector(), keep);
+			if (cf.getFileType() == FileType.REL && cf.getRelTrack() != 0) {
+				collectChain(cf.getRelTrack(), cf.getRelSector(), keep);
+			}
+		}
+		return keep;
+	}
+
+	private void collectChain(int track, int sector, java.util.Set<Integer> into) {
+		var seen = new java.util.HashSet<Integer>();
+		while (track != 0 && validBlock(track, sector)) {
+			int key = track << 8 | sector;
+			if (!seen.add(key)) {
+				break;
+			}
+			into.add(key);
+			int t = getCbmDiskValue(track, sector, 0);
+			sector = getCbmDiskValue(track, sector, 1);
+			track = t;
 		}
 	}
 }
