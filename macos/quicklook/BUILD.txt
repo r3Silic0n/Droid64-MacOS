@@ -1,0 +1,8 @@
+DroiD64 Quick Look preview extension (DroiD64Preview.appex), built on Linux:
+  python3 mkfont.py ../../src/main/resources/droid64/gui/chargens.bin c64rom.ttf
+  python3 -c "import base64;b=base64.b64encode(open('c64rom.ttf','rb').read()).decode();open('font_b64.h','w').write('static const char FONT_B64[] = \"'+b+'\";\n')"
+  clang -target arm64-apple-macos12.0 -O2 -fno-stack-protector -ffreestanding -c d64html.c macos.c
+  ld64.lld -arch arm64 -platform_version macos 12.0 14.0 -e _main -o DroiD64Preview d64html.o macos.o sdk/*.tbd -dead_strip
+  sign with machosign.resign() (entitlements: app-sandbox + files.user-selected.read-only), then
+  update the appex cdhash in the app's CodeResources and the launcher's CodeResources slot.
+Test on Linux: gcc -o test_html test_main.c d64html.c && ./test_html disk.d64 > out.html
